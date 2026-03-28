@@ -148,6 +148,68 @@ const runMigrations = () => {
     )`);
     db.exec('CREATE INDEX IF NOT EXISTS idx_session_names_lookup ON session_names(session_id, provider)');
 
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS delivery_workflows (
+        id TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        project_name TEXT NOT NULL,
+        project_path TEXT NOT NULL,
+        title TEXT,
+        requirement_text TEXT NOT NULL,
+        provider TEXT NOT NULL DEFAULT 'codex',
+        stage TEXT NOT NULL,
+        status TEXT NOT NULL,
+        stage_attempt INTEGER NOT NULL DEFAULT 1,
+        active_session_id TEXT,
+        latest_summary TEXT,
+        error_message TEXT,
+        data_json TEXT NOT NULL DEFAULT '{}',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_delivery_workflows_user_project
+      ON delivery_workflows(user_id, project_name, updated_at DESC)
+    `);
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_delivery_workflows_stage_status
+      ON delivery_workflows(stage, status)
+    `);
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS delivery_workflow_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        workflow_id TEXT NOT NULL,
+        stage TEXT NOT NULL,
+        event_type TEXT NOT NULL,
+        summary TEXT,
+        payload_json TEXT NOT NULL DEFAULT '{}',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (workflow_id) REFERENCES delivery_workflows(id) ON DELETE CASCADE
+      )
+    `);
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_delivery_workflow_events_lookup
+      ON delivery_workflow_events(workflow_id, created_at DESC)
+    `);
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS delivery_workflow_feedback (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        workflow_id TEXT NOT NULL,
+        content TEXT NOT NULL,
+        resolved_in_attempt INTEGER,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (workflow_id) REFERENCES delivery_workflows(id) ON DELETE CASCADE
+      )
+    `);
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_delivery_workflow_feedback_lookup
+      ON delivery_workflow_feedback(workflow_id, created_at DESC)
+    `);
+
     console.log('Database migrations completed successfully');
   } catch (error) {
     console.error('Error running migrations:', error.message);
@@ -596,6 +658,215 @@ const appConfigDb = {
   }
 };
 
+function safeParseJson(value, fallback = {}) {
+  if (!value || typeof value !== 'string') {
+    return fallback;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+
+function hydrateDeliveryWorkflow(row) {
+  if (!row) {
+    return null;
+  }
+
+  return {
+    id: row.id,
+    userId: row.user_id,
+    projectName: row.project_name,
+    projectPath: row.project_path,
+    title: row.title,
+    requirementText: row.requirement_text,
+    provider: row.provider,
+    stage: row.stage,
+    status: row.status,
+    stageAttempt: row.stage_attempt,
+    activeSessionId: row.active_session_id,
+    latestSummary: row.latest_summary,
+    errorMessage: row.error_message,
+    data: safeParseJson(row.data_json, {}),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+const deliveryWorkflowsDb = {
+  createWorkflow: ({
+    id,
+    userId,
+    projectName,
+    projectPath,
+    title = null,
+    requirementText,
+    provider = 'codex',
+    stage = 'requirement',
+    status = 'queued',
+    stageAttempt = 1,
+    activeSessionId = null,
+    latestSummary = null,
+    errorMessage = null,
+    data = {},
+  }) => {
+    db.prepare(`
+      INSERT INTO delivery_workflows (
+        id, user_id, project_name, project_path, title, requirement_text, provider,
+        stage, status, stage_attempt, active_session_id, latest_summary, error_message, data_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      userId,
+      projectName,
+      projectPath,
+      title,
+      requirementText,
+      provider,
+      stage,
+      status,
+      stageAttempt,
+      activeSessionId,
+      latestSummary,
+      errorMessage,
+      JSON.stringify(data ?? {})
+    );
+
+    return deliveryWorkflowsDb.getWorkflowById(id, userId);
+  },
+
+  getWorkflowById: (id, userId = null) => {
+    const row = userId == null
+      ? db.prepare('SELECT * FROM delivery_workflows WHERE id = ?').get(id)
+      : db.prepare('SELECT * FROM delivery_workflows WHERE id = ? AND user_id = ?').get(id, userId);
+    return hydrateDeliveryWorkflow(row);
+  },
+
+  getWorkflowsByProject: (userId, projectName) => {
+    const rows = db.prepare(`
+      SELECT * FROM delivery_workflows
+      WHERE user_id = ? AND project_name = ?
+      ORDER BY datetime(updated_at) DESC, datetime(created_at) DESC
+    `).all(userId, projectName);
+
+    return rows.map(hydrateDeliveryWorkflow);
+  },
+
+  updateWorkflow: (id, updates, userId = null) => {
+    const existing = deliveryWorkflowsDb.getWorkflowById(id, userId);
+    if (!existing) {
+      return null;
+    }
+
+    const next = {
+      title: updates.title !== undefined ? updates.title : existing.title,
+      requirementText: updates.requirementText !== undefined ? updates.requirementText : existing.requirementText,
+      provider: updates.provider !== undefined ? updates.provider : existing.provider,
+      stage: updates.stage !== undefined ? updates.stage : existing.stage,
+      status: updates.status !== undefined ? updates.status : existing.status,
+      stageAttempt: updates.stageAttempt !== undefined ? updates.stageAttempt : existing.stageAttempt,
+      activeSessionId: updates.activeSessionId !== undefined ? updates.activeSessionId : existing.activeSessionId,
+      latestSummary: updates.latestSummary !== undefined ? updates.latestSummary : existing.latestSummary,
+      errorMessage: updates.errorMessage !== undefined ? updates.errorMessage : existing.errorMessage,
+      data: updates.data !== undefined
+        ? (updates.data ?? {})
+        : updates.dataPatch
+          ? { ...existing.data, ...updates.dataPatch }
+          : existing.data,
+    };
+
+    db.prepare(`
+      UPDATE delivery_workflows
+      SET
+        title = ?,
+        requirement_text = ?,
+        provider = ?,
+        stage = ?,
+        status = ?,
+        stage_attempt = ?,
+        active_session_id = ?,
+        latest_summary = ?,
+        error_message = ?,
+        data_json = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(
+      next.title,
+      next.requirementText,
+      next.provider,
+      next.stage,
+      next.status,
+      next.stageAttempt,
+      next.activeSessionId,
+      next.latestSummary,
+      next.errorMessage,
+      JSON.stringify(next.data ?? {}),
+      id
+    );
+
+    return deliveryWorkflowsDb.getWorkflowById(id, userId);
+  },
+
+  addEvent: ({ workflowId, stage, eventType, summary = null, payload = {} }) => {
+    const result = db.prepare(`
+      INSERT INTO delivery_workflow_events (workflow_id, stage, event_type, summary, payload_json)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(workflowId, stage, eventType, summary, JSON.stringify(payload ?? {}));
+
+    return db.prepare('SELECT * FROM delivery_workflow_events WHERE id = ?').get(result.lastInsertRowid);
+  },
+
+  getEvents: (workflowId, limit = 100) => {
+    const rows = db.prepare(`
+      SELECT * FROM delivery_workflow_events
+      WHERE workflow_id = ?
+      ORDER BY id DESC
+      LIMIT ?
+    `).all(workflowId, limit);
+
+    return rows
+      .reverse()
+      .map((row) => ({
+        id: row.id,
+        workflowId: row.workflow_id,
+        stage: row.stage,
+        eventType: row.event_type,
+        summary: row.summary,
+        payload: safeParseJson(row.payload_json, {}),
+        createdAt: row.created_at,
+      }));
+  },
+
+  addFeedback: ({ workflowId, content, resolvedInAttempt = null }) => {
+    const result = db.prepare(`
+      INSERT INTO delivery_workflow_feedback (workflow_id, content, resolved_in_attempt)
+      VALUES (?, ?, ?)
+    `).run(workflowId, content, resolvedInAttempt);
+
+    return db.prepare('SELECT * FROM delivery_workflow_feedback WHERE id = ?').get(result.lastInsertRowid);
+  },
+
+  getFeedback: (workflowId) => {
+    const rows = db.prepare(`
+      SELECT * FROM delivery_workflow_feedback
+      WHERE workflow_id = ?
+      ORDER BY id DESC
+    `).all(workflowId);
+
+    return rows
+      .reverse()
+      .map((row) => ({
+        id: row.id,
+        workflowId: row.workflow_id,
+        content: row.content,
+        resolvedInAttempt: row.resolved_in_attempt,
+        createdAt: row.created_at,
+      }));
+  },
+};
+
 // Backward compatibility - keep old names pointing to new system
 const githubTokensDb = {
   createGithubToken: (userId, tokenName, githubToken, description = null) => {
@@ -626,5 +897,6 @@ export {
   sessionNamesDb,
   applyCustomSessionNames,
   appConfigDb,
+  deliveryWorkflowsDb,
   githubTokensDb // Backward compatibility
 };

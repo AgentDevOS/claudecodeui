@@ -1,0 +1,564 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { Project } from '../../../types/app';
+import { api } from '../../../utils/api';
+
+type DeliveryWorkflowMessage = {
+  type?: string;
+  projectName?: string;
+  workflowId?: string;
+};
+
+type DeliveryWorkflow = {
+  id: string;
+  title?: string | null;
+  requirementText: string;
+  stage: string;
+  status: string;
+  latestSummary?: string | null;
+  errorMessage?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  data?: Record<string, any>;
+  events?: Array<{
+    id: number;
+    stage: string;
+    eventType: string;
+    summary?: string | null;
+    createdAt: string;
+  }>;
+  feedback?: Array<{
+    id: number;
+    content: string;
+    createdAt: string;
+  }>;
+};
+
+type DeliveryWorkflowPanelProps = {
+  selectedProject: Project;
+  latestMessage: unknown;
+};
+
+const STAGE_LABELS: Record<string, string> = {
+  requirement: 'Requirement',
+  prototype: 'Prototype',
+  development: 'Development',
+  uat: 'UAT',
+  delivery: 'Delivery',
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  queued: 'Queued',
+  running: 'Running',
+  waiting_confirm: 'Waiting for Confirmation',
+  waiting_feedback: 'Waiting for UAT Feedback',
+  failed: 'Failed',
+  completed: 'Completed',
+};
+
+function classNames(...values: Array<string | false | null | undefined>) {
+  return values.filter(Boolean).join(' ');
+}
+
+function formatTimestamp(value?: string) {
+  if (!value) {
+    return 'Unknown';
+  }
+
+  try {
+    return new Date(value).toLocaleString();
+  } catch {
+    return value;
+  }
+}
+
+async function parseJsonResponse(response: Response) {
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || `HTTP ${response.status}`);
+  }
+  return data;
+}
+
+function getStatusTone(status: string) {
+  if (status === 'completed') return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300';
+  if (status === 'failed') return 'bg-red-500/15 text-red-700 dark:text-red-300';
+  if (status === 'running') return 'bg-blue-500/15 text-blue-700 dark:text-blue-300';
+  return 'bg-muted text-muted-foreground';
+}
+
+function WorkflowLinks({ workflow }: { workflow: DeliveryWorkflow }) {
+  const prototypeUrl = workflow.data?.publicUrls?.prototypePreview;
+  const uatUrl = workflow.data?.uat?.previewUrl || workflow.data?.publicUrls?.uatPreview;
+  const runtimeUrl = workflow.data?.uat?.runtimeUrl || workflow.data?.publicUrls?.runtime;
+
+  return (
+    <div className="grid gap-2">
+      {prototypeUrl && (
+        <a className="text-sm text-blue-600 hover:underline dark:text-blue-400" href={prototypeUrl} target="_blank" rel="noreferrer">
+          Prototype Preview
+        </a>
+      )}
+      {uatUrl && workflow.stage !== 'requirement' && (
+        <a className="text-sm text-blue-600 hover:underline dark:text-blue-400" href={uatUrl} target="_blank" rel="noreferrer">
+          UAT Preview
+        </a>
+      )}
+      {runtimeUrl && workflow.stage !== 'requirement' && workflow.stage !== 'prototype' && (
+        <a className="text-sm text-blue-600 hover:underline dark:text-blue-400" href={runtimeUrl} target="_blank" rel="noreferrer">
+          Runtime Endpoint
+        </a>
+      )}
+    </div>
+  );
+}
+
+export default function DeliveryWorkflowPanel({ selectedProject, latestMessage }: DeliveryWorkflowPanelProps) {
+  const { t } = useTranslation('common');
+  const [workflows, setWorkflows] = useState<DeliveryWorkflow[]>([]);
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
+  const [selectedWorkflow, setSelectedWorkflow] = useState<DeliveryWorkflow | null>(null);
+  const [isLoadingList, setIsLoadingList] = useState(false);
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [title, setTitle] = useState('');
+  const [requirementText, setRequirementText] = useState('');
+  const [feedbackText, setFeedbackText] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const selectedProjectPath = selectedProject.path || selectedProject.fullPath;
+
+  const refreshWorkflows = useCallback(async (preserveSelection = true) => {
+    setIsLoadingList(true);
+    try {
+      const response = await api.delivery.list(selectedProject.name);
+      const data = await parseJsonResponse(response);
+      const nextWorkflows = (data.workflows || []) as DeliveryWorkflow[];
+      setWorkflows(nextWorkflows);
+
+      const nextSelectedId = preserveSelection
+        ? selectedWorkflowId && nextWorkflows.some((workflow) => workflow.id === selectedWorkflowId)
+          ? selectedWorkflowId
+          : nextWorkflows[0]?.id || null
+        : nextWorkflows[0]?.id || null;
+
+      setSelectedWorkflowId(nextSelectedId);
+      setError(null);
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : 'Failed to load workflows');
+    } finally {
+      setIsLoadingList(false);
+    }
+  }, [selectedProject.name, selectedWorkflowId]);
+
+  const refreshSelectedWorkflow = useCallback(async (workflowId: string | null) => {
+    if (!workflowId) {
+      setSelectedWorkflow(null);
+      return;
+    }
+
+    setIsLoadingDetail(true);
+    try {
+      const response = await api.delivery.get(workflowId);
+      const data = await parseJsonResponse(response);
+      setSelectedWorkflow((data.workflow || null) as DeliveryWorkflow | null);
+      setError(null);
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : 'Failed to load workflow details');
+    } finally {
+      setIsLoadingDetail(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    setSelectedWorkflow(null);
+    setSelectedWorkflowId(null);
+    void refreshWorkflows(false);
+  }, [refreshWorkflows, selectedProject.name]);
+
+  useEffect(() => {
+    void refreshSelectedWorkflow(selectedWorkflowId);
+  }, [refreshSelectedWorkflow, selectedWorkflowId]);
+
+  useEffect(() => {
+    const message = latestMessage as DeliveryWorkflowMessage | null;
+    if (!message || message.type !== 'delivery-workflow-updated' || message.projectName !== selectedProject.name) {
+      return;
+    }
+
+    void refreshWorkflows(true);
+    if (!message.workflowId || message.workflowId === selectedWorkflowId) {
+      void refreshSelectedWorkflow(message.workflowId || selectedWorkflowId);
+    }
+  }, [latestMessage, refreshSelectedWorkflow, refreshWorkflows, selectedProject.name, selectedWorkflowId]);
+
+  const requirementDetails = selectedWorkflow?.data?.requirement?.content;
+  const prototypeDetails = selectedWorkflow?.data?.prototype?.content;
+  const testResults = selectedWorkflow?.data?.development?.report?.testResults || [];
+
+  const canConfirm = useMemo(() => (
+    selectedWorkflow?.status === 'waiting_confirm'
+    && (selectedWorkflow.stage === 'requirement' || selectedWorkflow.stage === 'prototype')
+  ), [selectedWorkflow]);
+
+  const canSubmitFeedback = selectedWorkflow?.stage === 'uat' && selectedWorkflow.status === 'waiting_feedback';
+  const canComplete = canSubmitFeedback;
+
+  const handleCreateWorkflow = useCallback(async () => {
+    if (!requirementText.trim()) {
+      setError('Requirement text is required');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const response = await api.delivery.create({
+        projectName: selectedProject.name,
+        projectPath: selectedProjectPath,
+        title: title.trim() || undefined,
+        requirementText: requirementText.trim(),
+      });
+      const data = await parseJsonResponse(response);
+      const workflow = data.workflow as DeliveryWorkflow;
+      setTitle('');
+      setRequirementText('');
+      setSelectedWorkflowId(workflow.id);
+      await refreshWorkflows(true);
+      await refreshSelectedWorkflow(workflow.id);
+      setError(null);
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : 'Failed to create workflow');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [requirementText, refreshSelectedWorkflow, refreshWorkflows, selectedProject.name, selectedProjectPath, title]);
+
+  const handleConfirm = useCallback(async () => {
+    if (!selectedWorkflow) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const response = await api.delivery.confirm(selectedWorkflow.id);
+      await parseJsonResponse(response);
+      await refreshWorkflows(true);
+      await refreshSelectedWorkflow(selectedWorkflow.id);
+      setError(null);
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : 'Failed to confirm workflow');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [refreshSelectedWorkflow, refreshWorkflows, selectedWorkflow]);
+
+  const handleSubmitFeedback = useCallback(async () => {
+    if (!selectedWorkflow || !feedbackText.trim()) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const response = await api.delivery.submitFeedback(selectedWorkflow.id, feedbackText.trim());
+      await parseJsonResponse(response);
+      setFeedbackText('');
+      await refreshWorkflows(true);
+      await refreshSelectedWorkflow(selectedWorkflow.id);
+      setError(null);
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : 'Failed to submit feedback');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [feedbackText, refreshSelectedWorkflow, refreshWorkflows, selectedWorkflow]);
+
+  const handleComplete = useCallback(async () => {
+    if (!selectedWorkflow) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const response = await api.delivery.complete(selectedWorkflow.id);
+      await parseJsonResponse(response);
+      await refreshWorkflows(true);
+      await refreshSelectedWorkflow(selectedWorkflow.id);
+      setError(null);
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : 'Failed to complete workflow');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [refreshSelectedWorkflow, refreshWorkflows, selectedWorkflow]);
+
+  return (
+    <div className="h-full overflow-auto bg-background px-4 py-4">
+      <div className="mx-auto flex max-w-7xl flex-col gap-4">
+        <div className="rounded-xl border border-border/60 bg-card p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold text-foreground">Delivery Workflow</h2>
+              <p className="text-sm text-muted-foreground">
+                Run requirement review, prototype generation, development, and UAT from one project workflow.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground hover:bg-accent"
+              onClick={() => void refreshWorkflows(true)}
+              disabled={isLoadingList}
+            >
+              {t('buttons.refresh')}
+            </button>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-[220px_minmax(0,1fr)_auto]">
+            <input
+              className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-ring"
+              placeholder="Workflow title"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+            />
+            <textarea
+              className="min-h-28 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-ring"
+              placeholder="Describe the feature or product request that should enter the delivery workflow."
+              value={requirementText}
+              onChange={(event) => setRequirementText(event.target.value)}
+            />
+            <button
+              type="button"
+              className="self-start rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => void handleCreateWorkflow()}
+              disabled={isSubmitting || !requirementText.trim()}
+            >
+              {isSubmitting ? 'Starting…' : t('buttons.create')}
+            </button>
+          </div>
+          {error && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
+        </div>
+
+        <div className="grid min-h-[560px] gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
+          <div className="rounded-xl border border-border/60 bg-card p-3">
+            <div className="mb-3 text-sm font-medium text-foreground">Workflows</div>
+            <div className="space-y-2">
+              {isLoadingList && workflows.length === 0 && (
+                <div className="rounded-lg border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+                  Loading workflows…
+                </div>
+              )}
+              {!isLoadingList && workflows.length === 0 && (
+                <div className="rounded-lg border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+                  No workflows yet for this project.
+                </div>
+              )}
+              {workflows.map((workflow) => (
+                <button
+                  key={workflow.id}
+                  type="button"
+                  className={classNames(
+                    'w-full rounded-lg border px-3 py-3 text-left transition-colors',
+                    selectedWorkflowId === workflow.id
+                      ? 'border-primary/40 bg-primary/5'
+                      : 'border-border/60 bg-background hover:bg-accent/60',
+                  )}
+                  onClick={() => setSelectedWorkflowId(workflow.id)}
+                >
+                  <div className="truncate text-sm font-medium text-foreground">
+                    {workflow.title || workflow.latestSummary || 'Untitled workflow'}
+                  </div>
+                  <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>{STAGE_LABELS[workflow.stage] || workflow.stage}</span>
+                    <span className={classNames('rounded-full px-2 py-0.5', getStatusTone(workflow.status))}>
+                      {STATUS_LABELS[workflow.status] || workflow.status}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border/60 bg-card p-4">
+            {!selectedWorkflow && (
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                {isLoadingDetail ? 'Loading workflow…' : 'Select a workflow to inspect stage outputs.'}
+              </div>
+            )}
+
+            {selectedWorkflow && (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-lg font-semibold text-foreground">
+                      {selectedWorkflow.title || selectedWorkflow.latestSummary || 'Untitled workflow'}
+                    </h3>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <span>{STAGE_LABELS[selectedWorkflow.stage] || selectedWorkflow.stage}</span>
+                      <span className={classNames('rounded-full px-2 py-0.5', getStatusTone(selectedWorkflow.status))}>
+                        {STATUS_LABELS[selectedWorkflow.status] || selectedWorkflow.status}
+                      </span>
+                      <span>Updated {formatTimestamp(selectedWorkflow.updatedAt)}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {canConfirm && (
+                      <button
+                        type="button"
+                        className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
+                        onClick={() => void handleConfirm()}
+                        disabled={isSubmitting}
+                      >
+                        {t('buttons.confirm')}
+                      </button>
+                    )}
+                    {canComplete && (
+                      <button
+                        type="button"
+                        className="rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground hover:bg-accent disabled:opacity-60"
+                        onClick={() => void handleComplete()}
+                        disabled={isSubmitting}
+                      >
+                        Mark Delivered
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {selectedWorkflow.latestSummary && (
+                  <div className="rounded-lg bg-muted/50 px-4 py-3 text-sm text-foreground">
+                    {selectedWorkflow.latestSummary}
+                  </div>
+                )}
+
+                {selectedWorkflow.errorMessage && (
+                  <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+                    {selectedWorkflow.errorMessage}
+                  </div>
+                )}
+
+                <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+                  <div className="space-y-4">
+                    <div className="rounded-lg border border-border/60 p-4">
+                      <div className="mb-2 text-sm font-medium text-foreground">Requirement</div>
+                      {requirementDetails ? (
+                        <div className="space-y-2 text-sm text-foreground">
+                          <div>{requirementDetails.summary}</div>
+                          {Array.isArray(requirementDetails.acceptanceCriteria) && requirementDetails.acceptanceCriteria.length > 0 && (
+                            <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
+                              {requirementDetails.acceptanceCriteria.map((item: string) => (
+                                <li key={item}>{item}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-sm text-muted-foreground">Requirement summary will appear after the first Codex pass completes.</div>
+                      )}
+                    </div>
+
+                    <div className="rounded-lg border border-border/60 p-4">
+                      <div className="mb-2 text-sm font-medium text-foreground">Prototype</div>
+                      {prototypeDetails ? (
+                        <div className="space-y-2 text-sm text-foreground">
+                          <div>{prototypeDetails.summary}</div>
+                          {Array.isArray(prototypeDetails.highlights) && prototypeDetails.highlights.length > 0 && (
+                            <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
+                              {prototypeDetails.highlights.map((item: string) => (
+                                <li key={item}>{item}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-sm text-muted-foreground">Prototype notes will appear after the prototype stage finishes.</div>
+                      )}
+                    </div>
+
+                    <div className="rounded-lg border border-border/60 p-4">
+                      <div className="mb-2 text-sm font-medium text-foreground">Verification</div>
+                      {testResults.length > 0 ? (
+                        <div className="space-y-2">
+                          {testResults.map((result: { name: string; status: string; details?: string }) => (
+                            <div key={`${result.name}-${result.status}`} className="rounded-md bg-muted/50 px-3 py-2 text-sm">
+                              <div className="font-medium text-foreground">{result.name}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {result.status} {result.details ? `· ${result.details}` : ''}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-sm text-muted-foreground">Test and build results will appear after development runs.</div>
+                      )}
+                    </div>
+
+                    {canSubmitFeedback && (
+                      <div className="rounded-lg border border-border/60 p-4">
+                        <div className="mb-2 text-sm font-medium text-foreground">UAT Feedback</div>
+                        <textarea
+                          className="min-h-28 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-ring"
+                          placeholder="Describe defects, adjustments, or follow-up requests from UAT."
+                          value={feedbackText}
+                          onChange={(event) => setFeedbackText(event.target.value)}
+                        />
+                        <div className="mt-3 flex justify-end">
+                          <button
+                            type="button"
+                            className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
+                            onClick={() => void handleSubmitFeedback()}
+                            disabled={isSubmitting || !feedbackText.trim()}
+                          >
+                            {t('buttons.submit')}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="rounded-lg border border-border/60 p-4">
+                      <div className="mb-2 text-sm font-medium text-foreground">Links</div>
+                      <WorkflowLinks workflow={selectedWorkflow} />
+                    </div>
+
+                    <div className="rounded-lg border border-border/60 p-4">
+                      <div className="mb-2 text-sm font-medium text-foreground">Timeline</div>
+                      <div className="space-y-2">
+                        {(selectedWorkflow.events || []).length === 0 && (
+                          <div className="text-sm text-muted-foreground">No events yet.</div>
+                        )}
+                        {(selectedWorkflow.events || []).map((event) => (
+                          <div key={event.id} className="rounded-md bg-muted/50 px-3 py-2 text-sm">
+                            <div className="font-medium text-foreground">{event.summary || event.eventType}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {STAGE_LABELS[event.stage] || event.stage} · {formatTimestamp(event.createdAt)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-border/60 p-4">
+                      <div className="mb-2 text-sm font-medium text-foreground">Submitted Feedback</div>
+                      <div className="space-y-2">
+                        {(selectedWorkflow.feedback || []).length === 0 && (
+                          <div className="text-sm text-muted-foreground">No UAT feedback submitted yet.</div>
+                        )}
+                        {(selectedWorkflow.feedback || []).map((item) => (
+                          <div key={item.id} className="rounded-md bg-muted/50 px-3 py-2 text-sm">
+                            <div className="text-foreground">{item.content}</div>
+                            <div className="mt-1 text-xs text-muted-foreground">{formatTimestamp(item.createdAt)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

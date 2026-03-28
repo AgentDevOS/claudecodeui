@@ -193,6 +193,38 @@ export const api = {
       }),
   },
 
+  delivery: {
+    list: (projectName) =>
+      authenticatedFetch(`/api/delivery?projectName=${encodeURIComponent(projectName)}`),
+
+    create: ({ projectName, projectPath, title, requirementText, provider = 'codex' }) =>
+      authenticatedFetch('/api/delivery', {
+        method: 'POST',
+        body: JSON.stringify({ projectName, projectPath, title, requirementText, provider }),
+      }),
+
+    get: (workflowId) =>
+      authenticatedFetch(`/api/delivery/${encodeURIComponent(workflowId)}`),
+
+    confirm: (workflowId) =>
+      authenticatedFetch(`/api/delivery/${encodeURIComponent(workflowId)}/confirm`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      }),
+
+    submitFeedback: (workflowId, content) =>
+      authenticatedFetch(`/api/delivery/${encodeURIComponent(workflowId)}/feedback`, {
+        method: 'POST',
+        body: JSON.stringify({ content }),
+      }),
+
+    complete: (workflowId) =>
+      authenticatedFetch(`/api/delivery/${encodeURIComponent(workflowId)}/complete`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      }),
+  },
+
   // Browse filesystem for project suggestions
   browseFilesystem: (dirPath = null) => {
     const params = new URLSearchParams();

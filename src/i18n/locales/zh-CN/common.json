@@ -19,6 +19,7 @@
   },
   "tabs": {
     "chat": "聊天",
+    "delivery": "交付",
     "shell": "终端",
     "files": "文件",
     "git": "源代码管理",

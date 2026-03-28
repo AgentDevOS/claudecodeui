@@ -66,6 +66,7 @@ import codexRoutes from './routes/codex.js';
 import geminiRoutes from './routes/gemini.js';
 import pluginsRoutes from './routes/plugins.js';
 import messagesRoutes from './routes/messages.js';
+import deliveryRoutes from './routes/delivery.js';
 import { createNormalizedMessage } from './providers/types.js';
 import { startEnabledPluginServers, stopAllPlugins, getPluginPort } from './utils/plugin-process-manager.js';
 import { initializeDatabase, sessionNamesDb, applyCustomSessionNames } from './database/db.js';
@@ -73,6 +74,9 @@ import { configureWebPush } from './services/vapid-keys.js';
 import { validateApiKey, authenticateToken, authenticateWebSocket } from './middleware/auth.js';
 import { IS_PLATFORM } from './constants/config.js';
 import { getConnectableHost } from '../shared/networkHosts.js';
+import { getWorkflowPreviewDirectory } from './services/delivery-orchestrator.js';
+import { getWorkflowRuntimePort } from './services/delivery-runtime-manager.js';
+import { setDeliveryWebSocketServer } from './utils/delivery-websocket.js';
 
 const VALID_PROVIDERS = ['claude', 'codex', 'cursor', 'gemini'];
 
@@ -294,6 +298,11 @@ const wss = new WebSocketServer({
     server,
     verifyClient: (info) => {
         console.log('WebSocket connection attempt to:', info.req.url);
+        const pathname = new URL(info.req.url, 'http://localhost').pathname;
+
+        if (pathname.startsWith('/runtime-ws/')) {
+            return true;
+        }
 
         // Platform mode: always allow connection
         if (IS_PLATFORM) {
@@ -326,6 +335,7 @@ const wss = new WebSocketServer({
         return true;
     }
 });
+setDeliveryWebSocketServer(wss);
 
 // Make WebSocket server available to routes
 app.locals.wss = wss;
@@ -401,8 +411,100 @@ app.use('/api/plugins', authenticateToken, pluginsRoutes);
 // Unified session messages route (protected)
 app.use('/api/sessions', authenticateToken, messagesRoutes);
 
+// Delivery workflow API routes (protected)
+app.use('/api/delivery', authenticateToken, deliveryRoutes);
+
 // Agent API Routes (uses API key authentication)
 app.use('/api/agent', agentRoutes);
+
+async function resolveDeliveryPreviewFile(rootDir, requestedPath = '') {
+    const normalizedRoot = path.resolve(rootDir);
+    const sanitized = requestedPath.replace(/^\/+/, '');
+    const directPath = path.resolve(normalizedRoot, sanitized || 'index.html');
+
+    if (!directPath.startsWith(normalizedRoot)) {
+        return null;
+    }
+
+    try {
+        const stat = await fsPromises.stat(directPath);
+        if (stat.isDirectory()) {
+            const indexFile = path.join(directPath, 'index.html');
+            await fsPromises.access(indexFile);
+            return indexFile;
+        }
+        return directPath;
+    } catch {
+        const fallbackFile = path.join(normalizedRoot, 'index.html');
+        try {
+            await fsPromises.access(fallbackFile);
+            return fallbackFile;
+        } catch {
+            return null;
+        }
+    }
+}
+
+app.get(['/preview/:workflowId/:target', '/preview/:workflowId/:target/*'], async (req, res) => {
+    try {
+        const { workflowId, target } = req.params;
+        const previewDir = getWorkflowPreviewDirectory(workflowId, target);
+        if (!previewDir) {
+            return res.status(404).json({ error: 'Preview not found' });
+        }
+
+        const requestedPath = req.params[0] || '';
+        const filePath = await resolveDeliveryPreviewFile(previewDir, requestedPath);
+        if (!filePath) {
+            return res.status(404).json({ error: 'Preview file not found' });
+        }
+
+        return res.sendFile(filePath);
+    } catch (error) {
+        console.error('Failed to serve delivery preview:', error);
+        return res.status(500).json({ error: 'Failed to serve preview', details: error.message });
+    }
+});
+
+app.all(['/runtime/:workflowId', '/runtime/:workflowId/*'], async (req, res) => {
+    const { workflowId } = req.params;
+    const port = getWorkflowRuntimePort(workflowId);
+    if (!port) {
+        return res.status(404).json({ error: 'Runtime not running' });
+    }
+
+    const runtimePath = req.params[0] ? `/${req.params[0]}` : '/';
+    const qs = req.url.includes('?') ? `?${req.url.split('?').slice(1).join('?')}` : '';
+    const headers = { ...req.headers, host: `127.0.0.1:${port}` };
+
+    const proxyReq = http.request({
+        hostname: '127.0.0.1',
+        port,
+        path: `${runtimePath}${qs}`,
+        method: req.method,
+        headers,
+    }, (proxyRes) => {
+        res.writeHead(proxyRes.statusCode || 502, proxyRes.headers);
+        proxyRes.pipe(res);
+    });
+
+    proxyReq.on('error', (error) => {
+        if (!res.headersSent) {
+            res.status(502).json({ error: 'Runtime proxy error', details: error.message });
+        } else {
+            res.end();
+        }
+    });
+
+    const hasBody = req.headers['content-length'] && parseInt(req.headers['content-length'], 10) > 0;
+    if (hasBody && req.body !== undefined) {
+        const bodyStr = JSON.stringify(req.body);
+        proxyReq.setHeader('content-length', Buffer.byteLength(bodyStr));
+        proxyReq.write(bodyStr);
+    }
+
+    proxyReq.end();
+});
 
 // Serve public files (like api-docs.html)
 app.use(express.static(path.join(__dirname, '../public')));
@@ -1419,6 +1521,46 @@ function handlePluginWsProxy(clientWs, pathname) {
     });
 }
 
+function handleRuntimeWsProxy(clientWs, pathname) {
+    const parts = pathname.split('/').filter(Boolean);
+    const workflowId = parts[1];
+    if (!workflowId) {
+        clientWs.close(4400, 'Invalid workflow id');
+        return;
+    }
+
+    const port = getWorkflowRuntimePort(workflowId);
+    if (!port) {
+        clientWs.close(4404, 'Runtime not running');
+        return;
+    }
+
+    const upstreamPath = parts.slice(2).join('/');
+    const upstream = new WebSocket(`ws://127.0.0.1:${port}/${upstreamPath}`);
+
+    upstream.on('open', () => {
+        console.log(`[Delivery] WS proxy connected for workflow "${workflowId}" on port ${port}`);
+    });
+
+    upstream.on('message', (data) => {
+        if (clientWs.readyState === WebSocket.OPEN) clientWs.send(data);
+    });
+    clientWs.on('message', (data) => {
+        if (upstream.readyState === WebSocket.OPEN) upstream.send(data);
+    });
+
+    upstream.on('close', () => { if (clientWs.readyState === WebSocket.OPEN) clientWs.close(); });
+    clientWs.on('close', () => { if (upstream.readyState === WebSocket.OPEN) upstream.close(); });
+
+    upstream.on('error', (err) => {
+        console.error(`[Delivery] WS proxy error for workflow "${workflowId}":`, err.message);
+        if (clientWs.readyState === WebSocket.OPEN) clientWs.close(4502, 'Upstream error');
+    });
+    clientWs.on('error', () => {
+        if (upstream.readyState === WebSocket.OPEN) upstream.close();
+    });
+}
+
 // WebSocket connection handler that routes based on URL path
 wss.on('connection', (ws, request) => {
     const url = request.url;
@@ -1434,6 +1576,8 @@ wss.on('connection', (ws, request) => {
         handleChatConnection(ws, request);
     } else if (pathname.startsWith('/plugin-ws/')) {
         handlePluginWsProxy(ws, pathname);
+    } else if (pathname.startsWith('/runtime-ws/')) {
+        handleRuntimeWsProxy(ws, pathname);
     } else {
         console.log('[WARN] Unknown WebSocket path:', pathname);
         ws.close();

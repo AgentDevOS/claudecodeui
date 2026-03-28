@@ -19,6 +19,7 @@
   },
   "tabs": {
     "chat": "채팅",
+    "delivery": "딜리버리",
     "shell": "Shell",
     "files": "파일",
     "git": "소스 관리",

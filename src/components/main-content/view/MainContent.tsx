@@ -4,6 +4,7 @@ import FileTree from '../../file-tree/view/FileTree';
 import StandaloneShell from '../../standalone-shell/view/StandaloneShell';
 import GitPanel from '../../git-panel/view/GitPanel';
 import PluginTabContent from '../../plugins/view/PluginTabContent';
+import DeliveryWorkflowPanel from '../../delivery-workflow/view/DeliveryWorkflowPanel';
 import type { MainContentProps } from '../types/types';
 import { useTaskMaster } from '../../../contexts/TaskMasterContext';
 import { useTasksSettings } from '../../../contexts/TasksSettingsContext';
@@ -137,6 +138,15 @@ function MainContent({
               />
             </ErrorBoundary>
           </div>
+
+          {activeTab === 'delivery' && (
+            <div className="h-full overflow-hidden">
+              <DeliveryWorkflowPanel
+                selectedProject={selectedProject}
+                latestMessage={latestMessage}
+              />
+            </div>
+          )}
 
           {activeTab === 'files' && (
             <div className="h-full overflow-hidden">

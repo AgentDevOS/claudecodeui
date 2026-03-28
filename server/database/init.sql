@@ -97,3 +97,55 @@ CREATE TABLE IF NOT EXISTS app_config (
     value TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Delivery workflow tables
+CREATE TABLE IF NOT EXISTS delivery_workflows (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    project_name TEXT NOT NULL,
+    project_path TEXT NOT NULL,
+    title TEXT,
+    requirement_text TEXT NOT NULL,
+    provider TEXT NOT NULL DEFAULT 'codex',
+    stage TEXT NOT NULL,
+    status TEXT NOT NULL,
+    stage_attempt INTEGER NOT NULL DEFAULT 1,
+    active_session_id TEXT,
+    latest_summary TEXT,
+    error_message TEXT,
+    data_json TEXT NOT NULL DEFAULT '{}',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_delivery_workflows_user_project
+    ON delivery_workflows(user_id, project_name, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_delivery_workflows_stage_status
+    ON delivery_workflows(stage, status);
+
+CREATE TABLE IF NOT EXISTS delivery_workflow_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    workflow_id TEXT NOT NULL,
+    stage TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    summary TEXT,
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (workflow_id) REFERENCES delivery_workflows(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_delivery_workflow_events_lookup
+    ON delivery_workflow_events(workflow_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS delivery_workflow_feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    workflow_id TEXT NOT NULL,
+    content TEXT NOT NULL,
+    resolved_in_attempt INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (workflow_id) REFERENCES delivery_workflows(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_delivery_workflow_feedback_lookup
+    ON delivery_workflow_feedback(workflow_id, created_at DESC);
