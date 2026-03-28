@@ -1,6 +1,7 @@
 import { ChevronRight, Trash2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { FileStatusCode } from '../../types/types';
-import { getStatusBadgeClass, getStatusLabel } from '../../utils/gitPanelUtils';
+import { getStatusBadgeClass } from '../../utils/gitPanelUtils';
 import GitDiffViewer from '../shared/GitDiffViewer';
 
 type FileChangeItemProps = {
@@ -32,7 +33,8 @@ export default function FileChangeItem({
   onToggleWrapText,
   onRequestFileAction,
 }: FileChangeItemProps) {
-  const statusLabel = getStatusLabel(status);
+  const { t } = useTranslation('git');
+  const statusLabel = t(`statusLabels.${status}`);
   const badgeClass = getStatusBadgeClass(status);
 
   return (
@@ -53,7 +55,7 @@ export default function FileChangeItem({
               onToggleExpanded(filePath);
             }}
             className={`cursor-pointer rounded p-0.5 hover:bg-accent ${isMobile ? 'mr-1' : 'mr-2'}`}
-            title={isExpanded ? 'Collapse diff' : 'Expand diff'}
+            title={isExpanded ? t('fileChange.collapseDiff') : t('fileChange.expandDiff')}
           >
             <ChevronRight className={`h-3 w-3 transition-transform duration-200 ease-in-out ${isExpanded ? 'rotate-90' : 'rotate-0'}`} />
           </button>
@@ -64,7 +66,7 @@ export default function FileChangeItem({
               event.stopPropagation();
               onOpenFile(filePath);
             }}
-            title="Click to open file"
+            title={t('fileChange.clickToOpenFile')}
           >
             {filePath}
           </span>
@@ -77,10 +79,10 @@ export default function FileChangeItem({
                   onRequestFileAction(filePath, status);
                 }}
                 className={`${isMobile ? 'px-2 py-1 text-xs' : 'p-1'} flex items-center gap-1 rounded font-medium text-destructive hover:bg-destructive/10`}
-                title={status === 'U' ? 'Delete untracked file' : 'Discard changes'}
+                title={status === 'U' ? t('fileChange.deleteUntracked') : t('fileChange.discardChanges')}
               >
                 <Trash2 className="h-3 w-3" />
-                {isMobile && <span>{status === 'U' ? 'Delete' : 'Discard'}</span>}
+                {isMobile && <span>{status === 'U' ? t('fileChange.delete') : t('fileChange.discard')}</span>}
               </button>
             )}
 
@@ -112,9 +114,9 @@ export default function FileChangeItem({
                 onToggleWrapText();
               }}
               className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-              title={wrapText ? 'Switch to horizontal scroll' : 'Switch to text wrap'}
+              title={wrapText ? t('fileChange.switchToHorizontalScroll') : t('fileChange.switchToTextWrap')}
             >
-              {wrapText ? 'Scroll' : 'Wrap'}
+              {wrapText ? t('fileChange.scroll') : t('fileChange.wrap')}
             </button>
           )}
         </div>

@@ -78,6 +78,23 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+-- User-scoped project registry
+CREATE TABLE IF NOT EXISTS user_projects (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    project_name TEXT NOT NULL,
+    project_path TEXT NOT NULL,
+    display_name TEXT,
+    source TEXT NOT NULL DEFAULT 'discovered',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE(user_id, project_name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_projects_user_id ON user_projects(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_projects_lookup ON user_projects(user_id, project_name);
+
 -- Session custom names (provider-agnostic display name overrides)
 CREATE TABLE IF NOT EXISTS session_names (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

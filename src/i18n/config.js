@@ -23,6 +23,9 @@ import enChat from './locales/en/chat.json';
 import enCodeEditor from './locales/en/codeEditor.json';
 // eslint-disable-next-line import-x/order
 import enTasks from './locales/en/tasks.json';
+import enOnboarding from './locales/en/onboarding.json';
+import enGit from './locales/en/git.json';
+import enProviderAuth from './locales/en/providerAuth.json';
 
 import koCommon from './locales/ko/common.json';
 import koSettings from './locales/ko/settings.json';
@@ -39,6 +42,10 @@ import zhSidebar from './locales/zh-CN/sidebar.json';
 import zhChat from './locales/zh-CN/chat.json';
 // eslint-disable-next-line import-x/order
 import zhCodeEditor from './locales/zh-CN/codeEditor.json';
+import zhTasks from './locales/zh-CN/tasks.json';
+import zhOnboarding from './locales/zh-CN/onboarding.json';
+import zhGit from './locales/zh-CN/git.json';
+import zhProviderAuth from './locales/zh-CN/providerAuth.json';
 
 import jaCommon from './locales/ja/common.json';
 import jaSettings from './locales/ja/settings.json';
@@ -99,6 +106,9 @@ i18n
         chat: enChat,
         codeEditor: enCodeEditor,
         tasks: enTasks,
+        onboarding: enOnboarding,
+        git: enGit,
+        providerAuth: enProviderAuth,
       },
       ko: {
         common: koCommon,
@@ -115,6 +125,10 @@ i18n
         sidebar: zhSidebar,
         chat: zhChat,
         codeEditor: zhCodeEditor,
+        tasks: zhTasks,
+        onboarding: zhOnboarding,
+        git: zhGit,
+        providerAuth: zhProviderAuth,
       },
       ja: {
         common: jaCommon,
@@ -155,7 +169,7 @@ i18n
     debug: import.meta.env.DEV,
 
     // Namespaces - load only what's needed
-    ns: ['common', 'settings', 'auth', 'sidebar', 'chat', 'codeEditor', 'tasks'],
+    ns: ['common', 'settings', 'auth', 'sidebar', 'chat', 'codeEditor', 'tasks', 'onboarding', 'git', 'providerAuth'],
     defaultNS: 'common',
 
     // Key separator for nested keys (default: '.')

@@ -12,7 +12,7 @@ export function useChatProviderState({ selectedSession }: UseChatProviderStateAr
   const [permissionMode, setPermissionMode] = useState<PermissionMode>('default');
   const [pendingPermissionRequests, setPendingPermissionRequests] = useState<PendingPermissionRequest[]>([]);
   const [provider, setProvider] = useState<SessionProvider>(() => {
-    return (localStorage.getItem('selected-provider') as SessionProvider) || 'claude';
+    return (localStorage.getItem('selected-provider') as SessionProvider) || 'codex';
   });
   const [cursorModel, setCursorModel] = useState<string>(() => {
     return localStorage.getItem('cursor-model') || CURSOR_MODELS.DEFAULT;

@@ -392,7 +392,7 @@ export function useProjectsState({
         setActiveTab('chat');
       }
 
-      const provider = localStorage.getItem('selected-provider') || 'claude';
+      const provider = localStorage.getItem('selected-provider') || 'codex';
       if (provider === 'cursor') {
         sessionStorage.setItem('cursorSessionId', session.id);
       }

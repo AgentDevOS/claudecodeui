@@ -3,13 +3,59 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
 import { spawn } from 'child_process';
-import sqlite3 from 'sqlite3';
-import { open } from 'sqlite';
 import crypto from 'crypto';
 import { CURSOR_MODELS } from '../../shared/modelConstants.js';
-import { applyCustomSessionNames } from '../database/db.js';
+import { applyCustomSessionNames, userProjectsDb } from '../database/db.js';
 
 const router = express.Router();
+let sqliteModulesPromise = null;
+
+async function getSqliteModules() {
+  if (!sqliteModulesPromise) {
+    sqliteModulesPromise = Promise.all([
+      import('sqlite3'),
+      import('sqlite'),
+    ]).then(([sqlite3Module, sqliteModule]) => ({
+      sqlite3: sqlite3Module.default,
+      open: sqliteModule.open,
+    }));
+  }
+
+  return sqliteModulesPromise;
+}
+
+async function resolveAuthorizedProjectPath(req) {
+  const userId = req.user?.id;
+  if (userId == null) {
+    const error = new Error('Unauthorized');
+    error.statusCode = 401;
+    throw error;
+  }
+
+  const requestedProjectPath = typeof req.query.projectPath === 'string' && req.query.projectPath.trim()
+    ? path.resolve(req.query.projectPath)
+    : null;
+
+  if (!requestedProjectPath) {
+    const error = new Error('projectPath is required');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const allowedProjects = userProjectsDb.getProjectsByUser(userId);
+
+  const hasAccess = allowedProjects.some((project) => (
+    project.project_path && path.resolve(project.project_path) === requestedProjectPath
+  ));
+
+  if (!hasAccess) {
+    const error = new Error('Project not found for current user');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  return requestedProjectPath;
+}
 
 // GET /api/cursor/config - Read Cursor CLI configuration
 router.get('/config', async (req, res) => {
@@ -347,10 +393,10 @@ router.post('/mcp/add-json', async (req, res) => {
 // GET /api/cursor/sessions - Get Cursor sessions from SQLite database
 router.get('/sessions', async (req, res) => {
   try {
-    const { projectPath } = req.query;
+    const projectPath = await resolveAuthorizedProjectPath(req);
     
     // Calculate cwdID hash for the project path (Cursor uses MD5 hash)
-    const cwdId = crypto.createHash('md5').update(projectPath || process.cwd()).digest('hex');
+    const cwdId = crypto.createHash('md5').update(projectPath).digest('hex');
     const cursorChatsPath = path.join(os.homedir(), '.cursor', 'chats', cwdId);
     
     
@@ -377,6 +423,8 @@ router.get('/sessions', async (req, res) => {
       let dbStatMtimeMs = null;
       
       try {
+        const { sqlite3, open } = await getSqliteModules();
+
         // Check if store.db exists
         await fs.access(storeDbPath);
         
@@ -572,7 +620,7 @@ router.get('/sessions', async (req, res) => {
     
   } catch (error) {
     console.error('Error reading Cursor sessions:', error);
-    res.status(500).json({ 
+    res.status(error.statusCode || 500).json({ 
       error: 'Failed to read Cursor sessions', 
       details: error.message 
     });
@@ -583,10 +631,11 @@ router.get('/sessions', async (req, res) => {
 router.get('/sessions/:sessionId', async (req, res) => {
   try {
     const { sessionId } = req.params;
-    const { projectPath } = req.query;
+    const projectPath = await resolveAuthorizedProjectPath(req);
+    const { sqlite3, open } = await getSqliteModules();
     
     // Calculate cwdID hash for the project path
-    const cwdId = crypto.createHash('md5').update(projectPath || process.cwd()).digest('hex');
+    const cwdId = crypto.createHash('md5').update(projectPath).digest('hex');
     const storeDbPath = path.join(os.homedir(), '.cursor', 'chats', cwdId, sessionId, 'store.db');
     
     
@@ -788,7 +837,7 @@ router.get('/sessions/:sessionId', async (req, res) => {
     
   } catch (error) {
     console.error('Error reading Cursor session:', error);
-    res.status(500).json({ 
+    res.status(error.statusCode || 500).json({ 
       error: 'Failed to read Cursor session', 
       details: error.message 
     });

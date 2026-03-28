@@ -1,5 +1,6 @@
 import { History, RefreshCw } from 'lucide-react';
 import { useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { GitDiffMap, GitCommitSummary } from '../../types/types';
 import CommitHistoryItem from './CommitHistoryItem';
 
@@ -20,6 +21,7 @@ export default function HistoryView({
   wrapText,
   onFetchCommitDiff,
 }: HistoryViewProps) {
+  const { t } = useTranslation('git');
   const [expandedCommits, setExpandedCommits] = useState<Set<string>>(new Set());
 
   const toggleCommitExpanded = useCallback(
@@ -36,14 +38,13 @@ export default function HistoryView({
         return next;
       });
 
-      // Load commit diff lazily only the first time a commit is expanded.
       if (isExpanding && !commitDiffs[commitHash]) {
         onFetchCommitDiff(commitHash).catch((err) => {
           console.error('Failed to fetch commit diff:', err);
         });
       }
     },
-    [commitDiffs, expandedCommits, onFetchCommitDiff, setExpandedCommits],
+    [commitDiffs, expandedCommits, onFetchCommitDiff],
   );
 
   return (
@@ -55,7 +56,7 @@ export default function HistoryView({
       ) : recentCommits.length === 0 ? (
         <div className="flex h-32 flex-col items-center justify-center text-muted-foreground">
           <History className="mb-2 h-10 w-10 opacity-40" />
-          <p className="text-sm">No commits found</p>
+          <p className="text-sm">{t('history.noCommitsFound')}</p>
         </div>
       ) : (
         <div className={isMobile ? 'pb-4' : ''}>

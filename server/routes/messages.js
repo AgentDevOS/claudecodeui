@@ -49,6 +49,7 @@ router.get('/:sessionId/messages', async (req, res) => {
       projectPath,
       limit,
       offset,
+      userId: req.user.id,
     });
 
     return res.json(result);

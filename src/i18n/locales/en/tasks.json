@@ -138,5 +138,8 @@
   "noMatchingTasks": {
     "title": "No tasks match your filters",
     "description": "Try adjusting your search or filter criteria."
+  },
+  "notifications": {
+    "prdSaved": "PRD saved successfully!"
   }
 }

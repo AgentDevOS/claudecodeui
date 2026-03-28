@@ -1,0 +1,52 @@
+{
+  "progress": {
+    "required": "必填",
+    "optional": "可选",
+    "steps": {
+      "gitConfiguration": "Git 配置",
+      "connectAgents": "连接智能体"
+    }
+  },
+  "gitStep": {
+    "title": "Git 配置",
+    "description": "配置您的 Git 身份，以确保提交记录中的作者信息正确。",
+    "fields": {
+      "gitName": "Git 名称",
+      "gitEmail": "Git 邮箱"
+    },
+    "placeholders": {
+      "gitName": "张三",
+      "gitEmail": "zhangsan@example.com"
+    },
+    "hints": {
+      "gitName": "将保存为 `git config --global user.name`。",
+      "gitEmail": "将保存为 `git config --global user.email`。"
+    }
+  },
+  "agentStep": {
+    "title": "连接您的 AI 智能体",
+    "description": "登录一个或多个 AI 编码助手，全部都是可选的。",
+    "footer": "稍后也可以在“设置”中继续配置。"
+  },
+  "status": {
+    "checking": "检查中...",
+    "connected": "已连接",
+    "notConnected": "未连接",
+    "login": "登录"
+  },
+  "buttons": {
+    "previous": "上一步",
+    "next": "下一步",
+    "saving": "保存中...",
+    "completeSetup": "完成设置",
+    "completing": "完成中..."
+  },
+  "errors": {
+    "gitNameEmailRequired": "Git 名称和邮箱都是必填项。",
+    "invalidEmail": "请输入有效的邮箱地址。",
+    "saveGitConfigFailed": "保存 Git 配置失败",
+    "completeOnboardingFailed": "完成引导失败",
+    "checkAuthStatusFailed": "检查认证状态失败",
+    "unknownError": "未知错误"
+  }
+}

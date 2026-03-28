@@ -1,0 +1,154 @@
+{
+  "panel": {
+    "selectProject": "选择一个项目以查看源代码管理"
+  },
+  "tabs": {
+    "changes": "变更",
+    "commits": "提交",
+    "branches": "分支"
+  },
+  "header": {
+    "remote": {
+      "defaultName": "远程仓库"
+    },
+    "confirm": {
+      "pull": "从 {{remoteName}} 拉取 {{count}} 个提交？",
+      "push": "将 {{count}} 个提交推送到 {{remoteName}}？",
+      "publish": "将分支“{{branchName}}”发布到 {{remoteName}}？",
+      "revertLocalCommit": "要回退最近一次本地提交吗？这会移除提交，但会保留其改动为已暂存状态。"
+    },
+    "actions": {
+      "createNewBranch": "创建新分支",
+      "publish": "发布",
+      "publishing": "发布中...",
+      "fetch": "抓取",
+      "fetching": "抓取中...",
+      "pull": "拉取 {{count}}",
+      "pulling": "拉取中...",
+      "push": "推送 {{count}}",
+      "pushing": "推送中...",
+      "revertLatestLocalCommit": "回退最近一次本地提交",
+      "refreshGitStatus": "刷新 Git 状态"
+    },
+    "remoteStatus": {
+      "ahead": "领先 {{count}} 个提交",
+      "behind": "落后 {{count}} 个提交",
+      "upToDate": "已同步"
+    },
+    "dismissError": "关闭错误提示"
+  },
+  "errorState": {
+    "tipLabel": "提示：",
+    "tipTextBefore": "在项目目录中运行",
+    "tipTextAfter": "以初始化 Git 源代码管理。"
+  },
+  "confirm": {
+    "titles": {
+      "discard": "放弃更改",
+      "delete": "删除文件",
+      "commit": "确认操作",
+      "pull": "确认拉取",
+      "push": "确认推送",
+      "publish": "发布分支",
+      "revertLocalCommit": "回退本地提交",
+      "deleteBranch": "删除分支"
+    },
+    "actions": {
+      "discard": "放弃",
+      "delete": "删除",
+      "commit": "确认",
+      "pull": "拉取",
+      "push": "推送",
+      "publish": "发布",
+      "revertLocalCommit": "回退提交",
+      "deleteBranch": "删除"
+    },
+    "cancel": "取消"
+  },
+  "statusLabels": {
+    "M": "已修改",
+    "A": "已新增",
+    "D": "已删除",
+    "U": "未跟踪"
+  },
+  "legend": {
+    "title": "文件状态说明"
+  },
+  "composer": {
+    "commitSelected": "提交 {{count}} 个文件",
+    "title": "提交更改",
+    "placeholder": "输入提交信息（Ctrl+Enter 提交）",
+    "generateCommitMessage": "生成提交信息",
+    "filesSelected": "已选择 {{count}} 个文件",
+    "commit": "提交",
+    "committing": "提交中...",
+    "confirm": "使用以下提交信息提交 {{count}} 个文件？“{{message}}”"
+  },
+  "changes": {
+    "confirm": {
+      "deleteUntracked": "删除未跟踪文件“{{filePath}}”？此操作无法撤销。",
+      "discard": "放弃“{{filePath}}”的所有改动？此操作无法撤销。"
+    },
+    "empty": {
+      "noCommitsYetTitle": "还没有提交记录",
+      "noCommitsYetDescription": "这个仓库还没有任何提交。创建第一次提交后才能开始跟踪变更。",
+      "createInitialCommit": "创建首次提交",
+      "creatingInitialCommit": "正在创建首次提交...",
+      "noChangesDetected": "未检测到变更"
+    },
+    "sections": {
+      "staged": "已暂存（{{count}}）",
+      "changes": "未暂存变更（{{count}}）",
+      "unstageAll": "全部取消暂存",
+      "stageAll": "全部暂存",
+      "noStagedFiles": "没有已暂存文件",
+      "allChangesStaged": "所有变更都已暂存"
+    }
+  },
+  "fileChange": {
+    "collapseDiff": "收起差异",
+    "expandDiff": "展开差异",
+    "clickToOpenFile": "点击打开文件",
+    "deleteUntracked": "删除未跟踪文件",
+    "discardChanges": "放弃更改",
+    "delete": "删除",
+    "discard": "放弃",
+    "switchToHorizontalScroll": "切换为横向滚动",
+    "switchToTextWrap": "切换为自动换行",
+    "scroll": "滚动",
+    "wrap": "换行"
+  },
+  "history": {
+    "noCommitsFound": "未找到提交记录",
+    "author": "作者",
+    "date": "日期",
+    "files": "文件",
+    "added": "新增",
+    "removed": "删除",
+    "changedFiles": "变更文件"
+  },
+  "branches": {
+    "current": "当前",
+    "remote": "远程",
+    "ahead": "领先 {{count}} 个提交",
+    "behind": "落后 {{count}} 个提交",
+    "switch": "切换",
+    "delete": "删除",
+    "confirmSwitch": "切换到分支“{{branchName}}”？请先确认没有未提交的更改。",
+    "confirmDelete": "删除分支“{{branchName}}”？此操作无法撤销。",
+    "summary": "本地 {{localCount}} 个，远程 {{remoteCount}} 个",
+    "newBranch": "新建分支",
+    "local": "本地",
+    "remoteLabel": "远程",
+    "noBranchesFound": "未找到分支"
+  },
+  "newBranch": {
+    "title": "创建新分支",
+    "branchName": "分支名称",
+    "placeholder": "feature/new-feature",
+    "description": "这将基于当前分支（{{currentBranch}}）创建一个新分支。",
+    "cancel": "取消",
+    "creating": "创建中...",
+    "createButton": "创建分支"
+  }
+}

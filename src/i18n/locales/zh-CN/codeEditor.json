@@ -18,6 +18,8 @@
     "save": "保存",
     "saving": "保存中...",
     "saved": "已保存！",
+    "previewMarkdown": "预览 Markdown",
+    "editMarkdown": "编辑 Markdown",
     "exitFullscreen": "退出全屏",
     "fullscreen": "全屏",
     "close": "关闭"

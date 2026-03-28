@@ -151,7 +151,7 @@ export function useChatSessionState({
   // When a real session ID arrives and we have a pending user message, flush it to the store
   const prevActiveSessionRef = useRef<string | null>(null);
   if (activeSessionId && activeSessionId !== prevActiveSessionRef.current && pendingUserMessage) {
-    const prov = (localStorage.getItem('selected-provider') as SessionProvider) || 'claude';
+    const prov = (localStorage.getItem('selected-provider') as SessionProvider) || 'codex';
     const normalized = chatMessageToNormalized(pendingUserMessage, activeSessionId, prov);
     if (normalized) {
       sessionStore.appendRealtime(activeSessionId, normalized);
@@ -189,7 +189,7 @@ export function useChatSessionState({
       setPendingUserMessage(msg);
       return;
     }
-    const prov = (localStorage.getItem('selected-provider') as SessionProvider) || 'claude';
+    const prov = (localStorage.getItem('selected-provider') as SessionProvider) || 'codex';
     const normalized = chatMessageToNormalized(msg, activeSessionId, prov);
     if (normalized) {
       sessionStore.appendRealtime(activeSessionId, normalized);
@@ -231,7 +231,7 @@ export function useChatSessionState({
       if (allMessagesLoadedRef.current) return false;
       if (!hasMoreMessages || !selectedSession || !selectedProject) return false;
 
-      const sessionProvider = selectedSession.__provider || 'claude';
+      const sessionProvider = selectedSession.__provider || 'codex';
       if (sessionProvider === 'cursor') return false;
 
       isLoadingMoreRef.current = true;
@@ -324,7 +324,7 @@ export function useChatSessionState({
       return;
     }
 
-    const provider = (selectedSession.__provider || localStorage.getItem('selected-provider') as Provider) || 'claude';
+    const provider = (selectedSession.__provider || localStorage.getItem('selected-provider') as Provider) || 'codex';
     const sessionKey = `${selectedSession.id}:${selectedProject.name}:${provider}`;
 
     // Skip if already loaded and fresh
@@ -405,7 +405,7 @@ export function useChatSessionState({
 
     const reloadExternalMessages = async () => {
       try {
-        const provider = (localStorage.getItem('selected-provider') as Provider) || 'claude';
+        const provider = (localStorage.getItem('selected-provider') as Provider) || 'codex';
 
         // Skip store refresh during active streaming
         if (!isLoading) {

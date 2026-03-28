@@ -207,7 +207,7 @@ function ChatInterface({
   // so missed streaming events are shown. Also reset isLoading.
   const handleWebSocketReconnect = useCallback(async () => {
     if (!selectedProject || !selectedSession) return;
-    const providerVal = (localStorage.getItem('selected-provider') as SessionProvider) || 'claude';
+    const providerVal = (localStorage.getItem('selected-provider') as SessionProvider) || 'codex';
     await sessionStore.refreshFromServer(selectedSession.id, {
       provider: (selectedSession.__provider || providerVal) as SessionProvider,
       projectName: selectedProject.name,

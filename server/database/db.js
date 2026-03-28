@@ -129,6 +129,25 @@ const runMigrations = () => {
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       )
     `);
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS user_projects (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        project_name TEXT NOT NULL,
+        project_path TEXT NOT NULL,
+        display_name TEXT,
+        source TEXT NOT NULL DEFAULT 'discovered',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE(user_id, project_name)
+      )
+    `);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_user_projects_user_id ON user_projects(user_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_user_projects_lookup ON user_projects(user_id, project_name)');
+    db.prepare(`DELETE FROM user_projects WHERE source = 'discovered'`).run();
+
     // Create app_config table if it doesn't exist (for existing installations)
     db.exec(`CREATE TABLE IF NOT EXISTS app_config (
       key TEXT PRIMARY KEY,
@@ -286,6 +305,15 @@ const userDb = {
     try {
       const row = db.prepare('SELECT id, username, created_at, last_login FROM users WHERE is_active = 1 LIMIT 1').get();
       return row;
+    } catch (err) {
+      throw err;
+    }
+  },
+
+  getActiveUserCount: () => {
+    try {
+      const row = db.prepare('SELECT COUNT(*) AS count FROM users WHERE is_active = 1').get();
+      return row?.count || 0;
     } catch (err) {
       throw err;
     }
@@ -631,6 +659,51 @@ function applyCustomSessionNames(sessions, provider) {
   }
 }
 
+const userProjectsDb = {
+  upsertProject: ({ userId, projectName, projectPath, displayName = null, source = 'discovered' }) => {
+    db.prepare(
+      `INSERT INTO user_projects (user_id, project_name, project_path, display_name, source, updated_at)
+       VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+       ON CONFLICT(user_id, project_name) DO UPDATE SET
+         project_path = excluded.project_path,
+         display_name = COALESCE(excluded.display_name, user_projects.display_name),
+         source = excluded.source,
+         updated_at = CURRENT_TIMESTAMP`
+    ).run(userId, projectName, projectPath, displayName, source);
+
+    return userProjectsDb.getProject(userId, projectName);
+  },
+
+  getProject: (userId, projectName) => {
+    return db.prepare(
+      'SELECT * FROM user_projects WHERE user_id = ? AND project_name = ?'
+    ).get(userId, projectName) || null;
+  },
+
+  getProjectsByUser: (userId) => {
+    return db.prepare(
+      'SELECT * FROM user_projects WHERE user_id = ? ORDER BY datetime(updated_at) DESC, id DESC'
+    ).all(userId);
+  },
+
+  countProjectsForUser: (userId) => {
+    const row = db.prepare('SELECT COUNT(*) AS count FROM user_projects WHERE user_id = ?').get(userId);
+    return row?.count || 0;
+  },
+
+  setDisplayName: (userId, projectName, displayName = null) => {
+    const result = db.prepare(
+      'UPDATE user_projects SET display_name = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND project_name = ?'
+    ).run(displayName, userId, projectName);
+    return result.changes > 0;
+  },
+
+  deleteProject: (userId, projectName) => {
+    const result = db.prepare('DELETE FROM user_projects WHERE user_id = ? AND project_name = ?').run(userId, projectName);
+    return result.changes > 0;
+  },
+};
+
 // App config database operations
 const appConfigDb = {
   get: (key) => {
@@ -896,6 +969,7 @@ export {
   pushSubscriptionsDb,
   sessionNamesDb,
   applyCustomSessionNames,
+  userProjectsDb,
   appConfigDb,
   deliveryWorkflowsDb,
   githubTokensDb // Backward compatibility

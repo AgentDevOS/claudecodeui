@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import PRDEditor from '../../prd-editor';
 import { useTaskMaster } from '../context/TaskMasterContext';
 import { useProjectPrdFiles } from '../hooks/useProjectPrdFiles';
@@ -10,9 +11,8 @@ type TaskMasterPanelProps = {
   isVisible: boolean;
 };
 
-const PRD_SAVE_MESSAGE = 'PRD saved successfully!';
-
 export default function TaskMasterPanel({ isVisible }: TaskMasterPanelProps) {
+  const { t } = useTranslation('tasks');
   const { tasks, currentProject, refreshTasks } = useTaskMaster();
 
   const [selectedTask, setSelectedTask] = useState<TaskMasterTask | null>(null);
@@ -43,10 +43,10 @@ export default function TaskMasterPanel({ isVisible }: TaskMasterPanelProps) {
     async (showNotification = false) => {
       await refreshPrdFiles();
       if (showNotification) {
-        showPrdNotification(PRD_SAVE_MESSAGE);
+        showPrdNotification(t('notifications.prdSaved'));
       }
     },
-    [refreshPrdFiles, showPrdNotification],
+    [refreshPrdFiles, showPrdNotification, t],
   );
 
   useEffect(() => {

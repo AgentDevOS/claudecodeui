@@ -1,5 +1,6 @@
 import { Check, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { authenticatedFetch } from '../../../utils/api';
 import ProviderLoginModal from '../../provider-auth/view/ProviderLoginModal';
 import AgentConnectionsStep from './subcomponents/AgentConnectionsStep';
@@ -19,6 +20,7 @@ type OnboardingProps = {
 };
 
 export default function Onboarding({ onComplete }: OnboardingProps) {
+  const { t } = useTranslation('onboarding');
   const [currentStep, setCurrentStep] = useState(0);
   const [gitName, setGitName] = useState('');
   const [gitEmail, setGitEmail] = useState('');
@@ -39,7 +41,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
             authenticated: false,
             email: null,
             loading: false,
-            error: 'Failed to check authentication status',
+            error: t('errors.checkAuthStatusFailed'),
           },
         }));
         return;
@@ -68,11 +70,11 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
           authenticated: false,
           email: null,
           loading: false,
-          error: caughtError instanceof Error ? caughtError.message : 'Unknown error',
+          error: caughtError instanceof Error ? caughtError.message : t('errors.unknownError'),
         },
       }));
     }
-  }, []);
+  }, [t]);
 
   const refreshAllProviderStatuses = useCallback(async () => {
     await Promise.all(cliProviders.map((provider) => checkProviderAuthStatus(provider)));
@@ -134,12 +136,12 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
     }
 
     if (!gitName.trim() || !gitEmail.trim()) {
-      setErrorMessage('Both git name and email are required.');
+      setErrorMessage(t('errors.gitNameEmailRequired'));
       return;
     }
 
     if (!gitEmailPattern.test(gitEmail)) {
-      setErrorMessage('Please enter a valid email address.');
+      setErrorMessage(t('errors.invalidEmail'));
       return;
     }
 
@@ -152,13 +154,13 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
       });
 
       if (!response.ok) {
-        const message = await readErrorMessageFromResponse(response, 'Failed to save git configuration');
+        const message = await readErrorMessageFromResponse(response, t('errors.saveGitConfigFailed'));
         throw new Error(message);
       }
 
       setCurrentStep((previous) => previous + 1);
     } catch (caughtError) {
-      setErrorMessage(caughtError instanceof Error ? caughtError.message : 'Failed to save git configuration');
+      setErrorMessage(caughtError instanceof Error ? caughtError.message : t('errors.saveGitConfigFailed'));
     } finally {
       setIsSubmitting(false);
     }
@@ -176,13 +178,13 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
     try {
       const response = await authenticatedFetch('/api/user/complete-onboarding', { method: 'POST' });
       if (!response.ok) {
-        const message = await readErrorMessageFromResponse(response, 'Failed to complete onboarding');
+        const message = await readErrorMessageFromResponse(response, t('errors.completeOnboardingFailed'));
         throw new Error(message);
       }
 
       await onComplete?.();
     } catch (caughtError) {
-      setErrorMessage(caughtError instanceof Error ? caughtError.message : 'Failed to complete onboarding');
+      setErrorMessage(caughtError instanceof Error ? caughtError.message : t('errors.completeOnboardingFailed'));
     } finally {
       setIsSubmitting(false);
     }
@@ -227,7 +229,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-muted-foreground transition-colors duration-200 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <ChevronLeft className="h-4 w-4" />
-                Previous
+                {t('buttons.previous')}
               </button>
 
               <div className="flex items-center gap-3">
@@ -240,11 +242,11 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                     {isSubmitting ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        Saving...
+                        {t('buttons.saving')}
                       </>
                     ) : (
                       <>
-                        Next
+                        {t('buttons.next')}
                         <ChevronRight className="h-4 w-4" />
                       </>
                     )}
@@ -258,12 +260,12 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                     {isSubmitting ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        Completing...
+                        {t('buttons.completing')}
                       </>
                     ) : (
                       <>
                         <Check className="h-4 w-4" />
-                        Complete Setup
+                        {t('buttons.completeSetup')}
                       </>
                     )}
                   </button>

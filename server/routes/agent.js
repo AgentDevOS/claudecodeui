@@ -902,7 +902,7 @@ router.post('/', validateExternalApiKey, async (req, res) => {
     // Register the project (or use existing registration)
     let project;
     try {
-      project = await addProjectManually(finalProjectPath);
+      project = await addProjectManually(finalProjectPath, null, req.user.id);
       console.log('📦 Project registered:', project);
     } catch (error) {
       // If project already exists, that's fine - continue with the existing registration

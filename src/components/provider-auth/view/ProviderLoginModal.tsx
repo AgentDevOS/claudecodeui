@@ -1,4 +1,5 @@
 import { ExternalLink, KeyRound, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import StandaloneShell from '../../standalone-shell/view/StandaloneShell';
 import { IS_PLATFORM } from '../../../constants/config';
 import type { CliProvider } from '../types';
@@ -52,13 +53,6 @@ const getProviderCommand = ({
   return 'gemini status';
 };
 
-const getProviderTitle = (provider: CliProvider) => {
-  if (provider === 'claude') return 'Claude CLI Login';
-  if (provider === 'cursor') return 'Cursor CLI Login';
-  if (provider === 'codex') return 'Codex CLI Login';
-  return 'Gemini CLI Configuration';
-};
-
 const normalizeProject = (project?: LoginModalProject | null) => {
   const normalizedName = project?.name || 'default';
   const normalizedFullPath = project?.fullPath ?? project?.path ?? (IS_PLATFORM ? '/workspace' : '');
@@ -80,12 +74,14 @@ export default function ProviderLoginModal({
   customCommand,
   isAuthenticated = false,
 }: ProviderLoginModalProps) {
+  const { t } = useTranslation('providerAuth');
+
   if (!isOpen) {
     return null;
   }
 
   const command = getProviderCommand({ provider, customCommand, isAuthenticated });
-  const title = getProviderTitle(provider);
+  const title = t(`titles.${provider}`);
   const shellProject = normalizeProject(project);
 
   const handleComplete = (exitCode: number) => {
@@ -101,7 +97,7 @@ export default function ProviderLoginModal({
           <button
             onClick={onClose}
             className="text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-gray-300"
-            aria-label="Close login modal"
+            aria-label={t('closeAriaLabel')}
           >
             <X className="h-6 w-6" />
           </button>
@@ -114,11 +110,9 @@ export default function ProviderLoginModal({
                 <KeyRound className="h-8 w-8 text-blue-600 dark:text-blue-400" />
               </div>
 
-              <h4 className="mb-3 text-xl font-medium text-gray-900 dark:text-white">Setup Gemini API Access</h4>
+              <h4 className="mb-3 text-xl font-medium text-gray-900 dark:text-white">{t('gemini.title')}</h4>
 
-              <p className="mb-8 max-w-md text-gray-600 dark:text-gray-400">
-                The Gemini CLI requires an API key to function. Configure it in your terminal first.
-              </p>
+              <p className="mb-8 max-w-md text-gray-600 dark:text-gray-400">{t('gemini.description')}</p>
 
               <div className="w-full max-w-lg rounded-xl border border-gray-200 bg-white p-6 text-left shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 <ol className="space-y-4">
@@ -127,14 +121,16 @@ export default function ProviderLoginModal({
                       1
                     </div>
                     <div>
-                      <p className="mb-1 text-sm font-medium text-gray-900 dark:text-white">Get your API key</p>
+                      <p className="mb-1 text-sm font-medium text-gray-900 dark:text-white">
+                        {t('gemini.steps.getKey.title')}
+                      </p>
                       <a
                         href="https://aistudio.google.com/app/apikey"
                         target="_blank"
                         rel="noreferrer"
-                        className="flex inline-flex items-center gap-1 text-sm text-blue-600 hover:underline dark:text-blue-400"
+                        className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline dark:text-blue-400"
                       >
-                        Google AI Studio <ExternalLink className="h-3 w-3" />
+                        {t('gemini.steps.getKey.linkLabel')} <ExternalLink className="h-3 w-3" />
                       </a>
                     </div>
                   </li>
@@ -143,8 +139,12 @@ export default function ProviderLoginModal({
                       2
                     </div>
                     <div>
-                      <p className="mb-1 text-sm font-medium text-gray-900 dark:text-white">Run configuration</p>
-                      <p className="mb-2 text-sm text-gray-600 dark:text-gray-400">Open your terminal and run:</p>
+                      <p className="mb-1 text-sm font-medium text-gray-900 dark:text-white">
+                        {t('gemini.steps.configure.title')}
+                      </p>
+                      <p className="mb-2 text-sm text-gray-600 dark:text-gray-400">
+                        {t('gemini.steps.configure.description')}
+                      </p>
                       <code className="block rounded bg-gray-100 px-3 py-2 font-mono text-sm text-pink-600 dark:bg-gray-900 dark:text-pink-400">
                         gemini config set api_key YOUR_KEY
                       </code>
@@ -157,7 +157,7 @@ export default function ProviderLoginModal({
                 onClick={onClose}
                 className="mt-8 rounded-lg bg-blue-600 px-6 py-2.5 font-medium text-white transition-colors hover:bg-blue-700"
               >
-                Done
+                {t('gemini.done')}
               </button>
             </div>
           ) : (

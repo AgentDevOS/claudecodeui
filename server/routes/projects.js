@@ -214,7 +214,7 @@ router.post('/create-workspace', async (req, res) => {
       }
 
       // Add the existing workspace to the project list
-      const project = await addProjectManually(absolutePath);
+      const project = await addProjectManually(absolutePath, null, req.user.id);
 
       return res.json({
         success: true,
@@ -279,7 +279,7 @@ router.post('/create-workspace', async (req, res) => {
         }
 
         // Add the cloned repo path to the project list
-        const project = await addProjectManually(clonePath);
+        const project = await addProjectManually(clonePath, null, req.user.id);
 
         return res.json({
           success: true,
@@ -289,7 +289,7 @@ router.post('/create-workspace', async (req, res) => {
       }
 
       // Add the new workspace to the project list (no clone)
-      const project = await addProjectManually(absolutePath);
+      const project = await addProjectManually(absolutePath, null, req.user.id);
 
       return res.json({
         success: true,
@@ -432,7 +432,7 @@ router.get('/clone-progress', async (req, res) => {
     gitProcess.on('close', async (code) => {
       if (code === 0) {
         try {
-          const project = await addProjectManually(clonePath);
+          const project = await addProjectManually(clonePath, null, req.user.id);
           sendEvent('complete', { project, message: 'Repository cloned successfully' });
         } catch (error) {
           sendEvent('error', { message: `Clone succeeded but failed to add project: ${error.message}` });

@@ -1,0 +1,24 @@
+{
+  "titles": {
+    "claude": "Claude CLI 登录",
+    "cursor": "Cursor CLI 登录",
+    "codex": "Codex CLI 登录",
+    "gemini": "Gemini CLI 配置"
+  },
+  "closeAriaLabel": "关闭登录弹窗",
+  "gemini": {
+    "title": "配置 Gemini API 访问",
+    "description": "Gemini CLI 需要 API Key 才能工作，请先在终端中完成配置。",
+    "steps": {
+      "getKey": {
+        "title": "获取 API Key",
+        "linkLabel": "Google AI Studio"
+      },
+      "configure": {
+        "title": "执行配置命令",
+        "description": "打开终端并运行："
+      }
+    },
+    "done": "完成"
+  }
+}

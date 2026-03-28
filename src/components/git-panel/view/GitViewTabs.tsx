@@ -1,4 +1,5 @@
 import { FileText, GitBranch, History } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { GitPanelView } from '../types/types';
 
 type GitViewTabsProps = {
@@ -8,20 +9,21 @@ type GitViewTabsProps = {
   onChange: (view: GitPanelView) => void;
 };
 
-const TABS: { id: GitPanelView; label: string; Icon: typeof FileText }[] = [
-  { id: 'changes', label: 'Changes', Icon: FileText },
-  { id: 'history', label: 'Commits', Icon: History },
-  { id: 'branches', label: 'Branches', Icon: GitBranch },
-];
-
 export default function GitViewTabs({ activeView, isHidden, changeCount, onChange }: GitViewTabsProps) {
+  const { t } = useTranslation('git');
+  const tabs: { id: GitPanelView; label: string; Icon: typeof FileText }[] = [
+    { id: 'changes', label: t('tabs.changes'), Icon: FileText },
+    { id: 'history', label: t('tabs.commits'), Icon: History },
+    { id: 'branches', label: t('tabs.branches'), Icon: GitBranch },
+  ];
+
   return (
     <div
       className={`flex border-b border-border/60 transition-all duration-300 ease-in-out ${
         isHidden ? 'max-h-0 -translate-y-2 overflow-hidden opacity-0' : 'max-h-16 translate-y-0 opacity-100'
       }`}
     >
-      {TABS.map(({ id, label, Icon }) => (
+      {tabs.map(({ id, label, Icon }) => (
         <button
           key={id}
           onClick={() => onChange(id)}

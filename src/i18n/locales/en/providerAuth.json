@@ -1,0 +1,24 @@
+{
+  "titles": {
+    "claude": "Claude CLI Login",
+    "cursor": "Cursor CLI Login",
+    "codex": "Codex CLI Login",
+    "gemini": "Gemini CLI Configuration"
+  },
+  "closeAriaLabel": "Close login modal",
+  "gemini": {
+    "title": "Setup Gemini API Access",
+    "description": "The Gemini CLI requires an API key to function. Configure it in your terminal first.",
+    "steps": {
+      "getKey": {
+        "title": "Get your API key",
+        "linkLabel": "Google AI Studio"
+      },
+      "configure": {
+        "title": "Run configuration",
+        "description": "Open your terminal and run:"
+      }
+    },
+    "done": "Done"
+  }
+}

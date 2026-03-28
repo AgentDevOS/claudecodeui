@@ -1,0 +1,154 @@
+{
+  "panel": {
+    "selectProject": "Select a project to view source control"
+  },
+  "tabs": {
+    "changes": "Changes",
+    "commits": "Commits",
+    "branches": "Branches"
+  },
+  "header": {
+    "remote": {
+      "defaultName": "remote"
+    },
+    "confirm": {
+      "pull": "Pull {{count}} commit(s) from {{remoteName}}?",
+      "push": "Push {{count}} commit(s) to {{remoteName}}?",
+      "publish": "Publish branch \"{{branchName}}\" to {{remoteName}}?",
+      "revertLocalCommit": "Revert the latest local commit? This removes the commit but keeps its changes staged."
+    },
+    "actions": {
+      "createNewBranch": "Create new branch",
+      "publish": "Publish",
+      "publishing": "Publishing...",
+      "fetch": "Fetch",
+      "fetching": "Fetching...",
+      "pull": "Pull {{count}}",
+      "pulling": "Pulling...",
+      "push": "Push {{count}}",
+      "pushing": "Pushing...",
+      "revertLatestLocalCommit": "Revert latest local commit",
+      "refreshGitStatus": "Refresh git status"
+    },
+    "remoteStatus": {
+      "ahead": "{{count}} ahead",
+      "behind": "{{count}} behind",
+      "upToDate": "Up to date"
+    },
+    "dismissError": "Dismiss error"
+  },
+  "errorState": {
+    "tipLabel": "Tip:",
+    "tipTextBefore": "Run",
+    "tipTextAfter": "in your project directory to initialize git source control."
+  },
+  "confirm": {
+    "titles": {
+      "discard": "Discard Changes",
+      "delete": "Delete File",
+      "commit": "Confirm Action",
+      "pull": "Confirm Pull",
+      "push": "Confirm Push",
+      "publish": "Publish Branch",
+      "revertLocalCommit": "Revert Local Commit",
+      "deleteBranch": "Delete Branch"
+    },
+    "actions": {
+      "discard": "Discard",
+      "delete": "Delete",
+      "commit": "Confirm",
+      "pull": "Pull",
+      "push": "Push",
+      "publish": "Publish",
+      "revertLocalCommit": "Revert Commit",
+      "deleteBranch": "Delete"
+    },
+    "cancel": "Cancel"
+  },
+  "statusLabels": {
+    "M": "Modified",
+    "A": "Added",
+    "D": "Deleted",
+    "U": "Untracked"
+  },
+  "legend": {
+    "title": "File Status Guide"
+  },
+  "composer": {
+    "commitSelected": "Commit {{count}} file(s)",
+    "title": "Commit Changes",
+    "placeholder": "Message (Ctrl+Enter to commit)",
+    "generateCommitMessage": "Generate commit message",
+    "filesSelected": "{{count}} file(s) selected",
+    "commit": "Commit",
+    "committing": "Committing...",
+    "confirm": "Commit {{count}} file(s) with message: \"{{message}}\"?"
+  },
+  "changes": {
+    "confirm": {
+      "deleteUntracked": "Delete untracked file \"{{filePath}}\"? This action cannot be undone.",
+      "discard": "Discard all changes to \"{{filePath}}\"? This action cannot be undone."
+    },
+    "empty": {
+      "noCommitsYetTitle": "No commits yet",
+      "noCommitsYetDescription": "This repository doesn't have any commits yet. Create your first commit to start tracking changes.",
+      "createInitialCommit": "Create Initial Commit",
+      "creatingInitialCommit": "Creating Initial Commit...",
+      "noChangesDetected": "No changes detected"
+    },
+    "sections": {
+      "staged": "Staged ({{count}})",
+      "changes": "Changes ({{count}})",
+      "unstageAll": "Unstage All",
+      "stageAll": "Stage All",
+      "noStagedFiles": "No staged files",
+      "allChangesStaged": "All changes staged"
+    }
+  },
+  "fileChange": {
+    "collapseDiff": "Collapse diff",
+    "expandDiff": "Expand diff",
+    "clickToOpenFile": "Click to open file",
+    "deleteUntracked": "Delete untracked file",
+    "discardChanges": "Discard changes",
+    "delete": "Delete",
+    "discard": "Discard",
+    "switchToHorizontalScroll": "Switch to horizontal scroll",
+    "switchToTextWrap": "Switch to text wrap",
+    "scroll": "Scroll",
+    "wrap": "Wrap"
+  },
+  "history": {
+    "noCommitsFound": "No commits found",
+    "author": "Author",
+    "date": "Date",
+    "files": "Files",
+    "added": "Added",
+    "removed": "Removed",
+    "changedFiles": "Changed Files"
+  },
+  "branches": {
+    "current": "current",
+    "remote": "remote",
+    "ahead": "{{count}} ahead",
+    "behind": "{{count}} behind",
+    "switch": "Switch",
+    "delete": "Delete",
+    "confirmSwitch": "Switch to branch \"{{branchName}}\"? Make sure you have no uncommitted changes.",
+    "confirmDelete": "Delete branch \"{{branchName}}\"? This cannot be undone.",
+    "summary": "{{localCount}} local, {{remoteCount}} remote",
+    "newBranch": "New branch",
+    "local": "Local",
+    "remoteLabel": "Remote",
+    "noBranchesFound": "No branches found"
+  },
+  "newBranch": {
+    "title": "Create New Branch",
+    "branchName": "Branch Name",
+    "placeholder": "feature/new-feature",
+    "description": "This will create a new branch from the current branch ({{currentBranch}})",
+    "cancel": "Cancel",
+    "creating": "Creating...",
+    "createButton": "Create Branch"
+  }
+}

@@ -1,10 +1,9 @@
 import { useEffect } from 'react';
 import { Check, Download, RotateCcw, Trash2, Upload } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import {
-  CONFIRMATION_ACTION_LABELS,
   CONFIRMATION_BUTTON_CLASSES,
   CONFIRMATION_ICON_CONTAINER_CLASSES,
-  CONFIRMATION_TITLES,
 } from '../../constants/constants';
 import type { ConfirmationRequest } from '../../types/types';
 
@@ -35,6 +34,7 @@ function renderConfirmActionIcon(actionType: ConfirmationRequest['type']) {
 }
 
 export default function ConfirmActionModal({ action, onCancel, onConfirm }: ConfirmActionModalProps) {
+  const { t } = useTranslation('git');
   const titleId = action ? `confirmation-title-${action.type}` : undefined;
 
   useEffect(() => {
@@ -73,7 +73,7 @@ export default function ConfirmActionModal({ action, onCancel, onConfirm }: Conf
               {renderConfirmActionIcon(action.type)}
             </div>
             <h3 id={titleId} className="text-lg font-semibold text-foreground">
-              {CONFIRMATION_TITLES[action.type]}
+              {t(`confirm.titles.${action.type}`)}
             </h3>
           </div>
 
@@ -84,14 +84,14 @@ export default function ConfirmActionModal({ action, onCancel, onConfirm }: Conf
               onClick={onCancel}
               className="rounded-lg px-4 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
-              Cancel
+              {t('confirm.cancel')}
             </button>
             <button
               onClick={onConfirm}
               className={`flex items-center space-x-2 rounded-lg px-4 py-2 text-sm text-white transition-colors ${CONFIRMATION_BUTTON_CLASSES[action.type]}`}
             >
               {renderConfirmActionIcon(action.type)}
-              <span>{CONFIRMATION_ACTION_LABELS[action.type]}</span>
+              <span>{t(`confirm.actions.${action.type}`)}</span>
             </button>
           </div>
         </div>

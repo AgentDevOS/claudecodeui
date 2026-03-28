@@ -211,14 +211,14 @@ export const claudeAdapter = {
    * Fetch session history from JSONL files, returning normalized messages.
    */
   async fetchHistory(sessionId, opts = {}) {
-    const { projectName, limit = null, offset = 0 } = opts;
+    const { projectName, limit = null, offset = 0, userId = null } = opts;
     if (!projectName) {
       return { messages: [], total: 0, hasMore: false, offset: 0, limit: null };
     }
 
     let result;
     try {
-      result = await getSessionMessages(projectName, sessionId, limit, offset);
+      result = await getSessionMessages(projectName, sessionId, limit, offset, userId);
     } catch (error) {
       console.warn(`[ClaudeAdapter] Failed to load session ${sessionId}:`, error.message);
       return { messages: [], total: 0, hasMore: false, offset: 0, limit: null };

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import type { CliProvider, ProviderStatusMap } from '../types';
 import AgentConnectionCard from './AgentConnectionCard';
 
@@ -41,13 +42,13 @@ export default function AgentConnectionsStep({
   providerStatuses,
   onOpenProviderLogin,
 }: AgentConnectionsStepProps) {
+  const { t } = useTranslation('onboarding');
+
   return (
     <div className="space-y-6">
       <div className="mb-6 text-center">
-        <h2 className="mb-2 text-2xl font-bold text-foreground">Connect Your AI Agents</h2>
-        <p className="text-muted-foreground">
-          Login to one or more AI coding assistants. All are optional.
-        </p>
+        <h2 className="mb-2 text-2xl font-bold text-foreground">{t('agentStep.title')}</h2>
+        <p className="text-muted-foreground">{t('agentStep.description')}</p>
       </div>
 
       <div className="space-y-3">
@@ -66,7 +67,7 @@ export default function AgentConnectionsStep({
       </div>
 
       <div className="pt-2 text-center text-sm text-muted-foreground">
-        <p>You can configure these later in Settings.</p>
+        <p>{t('agentStep.footer')}</p>
       </div>
     </div>
   );

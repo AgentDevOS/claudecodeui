@@ -24,7 +24,8 @@
     "url": "https://github.com/siteboon/claudecodeui/issues"
   },
   "scripts": {
-    "dev": "concurrently --kill-others \"npm run server\" \"npm run client\"",
+    "dev": "./scripts/restart-dev.sh",
+    "dev:raw": "concurrently --kill-others \"npm run server\" \"npm run client\"",
     "server": "node server/index.js",
     "client": "vite",
     "build": "vite build",
@@ -136,6 +137,12 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.56.1",
     "vite": "^7.0.4"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "sqlite3"
+    ]
   },
   "lint-staged": {
     "src/**/*.{ts,tsx,js,jsx}": "eslint"
