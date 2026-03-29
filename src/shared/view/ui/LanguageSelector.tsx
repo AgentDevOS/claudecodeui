@@ -22,6 +22,7 @@ export default function LanguageSelector({ compact = false }: LanguageSelectorPr
 
   const handleLanguageChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const newLanguage = event.target.value;
+    localStorage.setItem('userLanguageExplicit', 'true');
     i18n.changeLanguage(newLanguage);
   };
 

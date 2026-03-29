@@ -19,6 +19,7 @@ export default function FolderBrowserModal({
   onFolderSelected,
 }: FolderBrowserModalProps) {
   const [currentPath, setCurrentPath] = useState('~');
+  const [rootPath, setRootPath] = useState('~');
   const [folders, setFolders] = useState<FolderSuggestion[]>([]);
   const [loadingFolders, setLoadingFolders] = useState(false);
   const [showHiddenFolders, setShowHiddenFolders] = useState(false);
@@ -34,6 +35,7 @@ export default function FolderBrowserModal({
     try {
       const result = await browseFilesystemFolders(pathToLoad);
       setCurrentPath(result.path);
+      setRootPath(result.rootPath);
       setFolders(result.suggestions);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Failed to load folders');
@@ -90,7 +92,7 @@ export default function FolderBrowserModal({
     }
   }, [currentPath, loadFolders, newFolderName]);
 
-  const parentPath = getParentPath(currentPath);
+  const parentPath = currentPath === rootPath ? null : getParentPath(currentPath);
 
   if (!isOpen) {
     return null;
@@ -104,7 +106,10 @@ export default function FolderBrowserModal({
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/50">
               <FolderOpen className="h-4 w-4 text-blue-600 dark:text-blue-400" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Select Folder</h3>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Select Folder</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Browsing is limited to your configured workspace root.</p>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">

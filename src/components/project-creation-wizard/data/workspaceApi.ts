@@ -49,6 +49,7 @@ export const browseFilesystemFolders = async (pathToBrowse: string) => {
 
   return {
     path: data.path || pathToBrowse,
+    rootPath: data.rootPath || data.path || pathToBrowse,
     suggestions: (data.suggestions || []) as FolderSuggestion[],
   };
 };
@@ -83,9 +84,12 @@ const buildCloneProgressQuery = ({
   newGithubToken,
 }: CloneWorkspaceParams) => {
   const query = new URLSearchParams({
-    path: workspacePath.trim(),
     githubUrl: githubUrl.trim(),
   });
+
+  if (workspacePath.trim()) {
+    query.set('path', workspacePath.trim());
+  }
 
   if (tokenMode === 'stored' && selectedGithubToken) {
     query.set('githubTokenId', selectedGithubToken);

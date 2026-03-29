@@ -77,17 +77,57 @@ import deTasks from './locales/de/tasks.json';
 // Import supported languages configuration
 import { languages } from './languages.js';
 
-// Get saved language preference from localStorage
+const normalizeLanguage = (value) => {
+  if (!value) {
+    return null;
+  }
+
+  if (languages.some((lang) => lang.value === value)) {
+    return value;
+  }
+
+  const lowerValue = value.toLowerCase();
+
+  if (lowerValue.startsWith('zh')) {
+    return 'zh-CN';
+  }
+
+  const baseLanguage = value.split('-')[0];
+  if (languages.some((lang) => lang.value === baseLanguage)) {
+    return baseLanguage;
+  }
+
+  return null;
+};
+
+const hasExplicitLanguagePreference = () => {
+  try {
+    return localStorage.getItem('userLanguageExplicit') === 'true';
+  } catch {
+    return false;
+  }
+};
+
+// Get saved language preference from localStorage, then fall back to browser language
 const getSavedLanguage = () => {
   try {
-    const saved = localStorage.getItem('userLanguage');
-    // Validate that the saved language is supported
-    if (saved && languages.some(lang => lang.value === saved)) {
+    const saved = normalizeLanguage(localStorage.getItem('userLanguage'));
+    if (saved && hasExplicitLanguagePreference()) {
       return saved;
     }
+
+    const browserLanguage = normalizeLanguage(navigator.language);
+    if (browserLanguage) {
+      return browserLanguage;
+    }
+
+    if (saved) {
+      return saved;
+    }
+
     return 'en';
   } catch {
-    return 'en';
+    return normalizeLanguage(globalThis?.navigator?.language) || 'en';
   }
 };
 

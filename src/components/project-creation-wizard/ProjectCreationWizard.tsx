@@ -83,7 +83,7 @@ export default function ProjectCreationWizard({
     }
 
     if (step === 2) {
-      if (!formState.workspacePath.trim()) {
+      if (formState.workspaceType === 'existing' && !formState.workspacePath.trim()) {
         setError(t('projectWizard.errors.providePath'));
         return;
       }
@@ -123,9 +123,11 @@ export default function ProjectCreationWizard({
         return;
       }
 
+      const trimmedWorkspacePath = formState.workspacePath.trim();
+
       const project = await createWorkspaceRequest({
         workspaceType: formState.workspaceType,
-        path: formState.workspacePath.trim(),
+        ...(trimmedWorkspacePath ? { path: trimmedWorkspacePath } : {}),
       });
 
       onProjectCreated?.(project);

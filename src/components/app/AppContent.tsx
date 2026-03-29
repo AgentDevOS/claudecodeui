@@ -170,6 +170,7 @@ export default function AppContent() {
           latestMessage={latestMessage}
           isMobile={isMobile}
           onMenuClick={() => setSidebarOpen(true)}
+          onCreateProject={() => window.dispatchEvent(new Event('open-project-creation'))}
           isLoading={isLoadingProjects}
           onInputFocusChange={setIsInputFocused}
           onSessionActive={markSessionAsActive}

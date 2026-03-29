@@ -1,9 +1,10 @@
-import { Folder } from 'lucide-react';
+import { Folder, FolderPlus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '../../../../shared/view/ui';
 import type { MainContentStateViewProps } from '../../types/types';
 import MobileMenuButton from './MobileMenuButton';
 
-export default function MainContentStateView({ mode, isMobile, onMenuClick }: MainContentStateViewProps) {
+export default function MainContentStateView({ mode, isMobile, onMenuClick, onCreateProject }: MainContentStateViewProps) {
   const { t } = useTranslation();
 
   const isLoading = mode === 'loading';
@@ -46,6 +47,10 @@ export default function MainContentStateView({ mode, isMobile, onMenuClick }: Ma
                 <strong>{t('mainContent.tip')}:</strong> {isMobile ? t('mainContent.createProjectMobile') : t('mainContent.createProjectDesktop')}
               </p>
             </div>
+            <Button className="mt-4 h-10 rounded-lg px-4" onClick={onCreateProject}>
+              <FolderPlus className="h-4 w-4" />
+              {t('projectWizard.buttons.createProject')}
+            </Button>
           </div>
         </div>
       )}

@@ -1,4 +1,4 @@
-import { Folder, FolderPlus, MessageSquare, Plus, RefreshCw, Search, X, PanelLeftClose } from 'lucide-react';
+import { Folder, FolderPlus, MessageSquare, RefreshCw, Search, X, PanelLeftClose } from 'lucide-react';
 import type { TFunction } from 'i18next';
 import { Button, Input } from '../../../../shared/view/ui';
 import { IS_PLATFORM } from '../../../../constants/config';
@@ -92,7 +92,7 @@ export default function SidebarHeader({
               onClick={onCreateProject}
               title={t('tooltips.createProject')}
             >
-              <Plus className="h-3.5 w-3.5" />
+              <FolderPlus className="h-3.5 w-3.5" />
             </Button>
             <Button
               variant="ghost"
