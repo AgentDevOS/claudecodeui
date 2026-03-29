@@ -22,6 +22,26 @@ const c = {
     dim: (text) => `${colors.dim}${text}${colors.reset}`,
 };
 
+function generateUserPublicId() {
+  return `usr_${crypto.randomBytes(12).toString('base64url')}`;
+}
+
+function ensureUserPublicId(userId) {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const publicId = generateUserPublicId();
+    try {
+      db.prepare('UPDATE users SET public_id = ? WHERE id = ?').run(publicId, userId);
+      return publicId;
+    } catch (error) {
+      if (error.code !== 'SQLITE_CONSTRAINT_UNIQUE') {
+        throw error;
+      }
+    }
+  }
+
+  throw new Error(`Failed to allocate a unique public_id for user ${userId}`);
+}
+
 // Use DATABASE_PATH environment variable if set, otherwise use default location
 const DB_PATH = process.env.DATABASE_PATH || path.join(__dirname, 'auth.db');
 const INIT_SQL_PATH = path.join(__dirname, 'init.sql');
@@ -99,6 +119,17 @@ const runMigrations = () => {
       console.log('Running migration: Adding has_completed_onboarding column');
       db.exec('ALTER TABLE users ADD COLUMN has_completed_onboarding BOOLEAN DEFAULT 0');
     }
+
+    if (!columnNames.includes('public_id')) {
+      console.log('Running migration: Adding public_id column');
+      db.exec('ALTER TABLE users ADD COLUMN public_id TEXT');
+    }
+
+    const usersMissingPublicId = db.prepare('SELECT id FROM users WHERE public_id IS NULL OR TRIM(public_id) = \'\'').all();
+    for (const row of usersMissingPublicId) {
+      ensureUserPublicId(row.id);
+    }
+    db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_public_id ON users(public_id)');
 
     db.exec(`
       CREATE TABLE IF NOT EXISTS user_notification_preferences (
@@ -264,9 +295,20 @@ const userDb = {
   // Create a new user
   createUser: (username, passwordHash) => {
     try {
-      const stmt = db.prepare('INSERT INTO users (username, password_hash) VALUES (?, ?)');
-      const result = stmt.run(username, passwordHash);
-      return { id: result.lastInsertRowid, username };
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        const publicId = generateUserPublicId();
+        try {
+          const stmt = db.prepare('INSERT INTO users (username, password_hash, public_id) VALUES (?, ?, ?)');
+          const result = stmt.run(username, passwordHash, publicId);
+          return { id: result.lastInsertRowid, username, publicId };
+        } catch (err) {
+          if (err.code !== 'SQLITE_CONSTRAINT_UNIQUE' || !String(err.message || '').includes('users.public_id')) {
+            throw err;
+          }
+        }
+      }
+
+      throw new Error('Failed to allocate a unique public_id for user');
     } catch (err) {
       throw err;
     }
@@ -275,7 +317,7 @@ const userDb = {
   // Get user by username
   getUserByUsername: (username) => {
     try {
-      const row = db.prepare('SELECT * FROM users WHERE username = ? AND is_active = 1').get(username);
+      const row = db.prepare('SELECT *, public_id AS publicId FROM users WHERE username = ? AND is_active = 1').get(username);
       return row;
     } catch (err) {
       throw err;
@@ -294,7 +336,7 @@ const userDb = {
   // Get user by ID
   getUserById: (userId) => {
     try {
-      const row = db.prepare('SELECT id, username, created_at, last_login FROM users WHERE id = ? AND is_active = 1').get(userId);
+      const row = db.prepare('SELECT id, username, public_id AS publicId, created_at, last_login FROM users WHERE id = ? AND is_active = 1').get(userId);
       return row;
     } catch (err) {
       throw err;
@@ -303,7 +345,7 @@ const userDb = {
 
   getFirstUser: () => {
     try {
-      const row = db.prepare('SELECT id, username, created_at, last_login FROM users WHERE is_active = 1 LIMIT 1').get();
+      const row = db.prepare('SELECT id, username, public_id AS publicId, created_at, last_login FROM users WHERE is_active = 1 LIMIT 1').get();
       return row;
     } catch (err) {
       throw err;
@@ -314,6 +356,15 @@ const userDb = {
     try {
       const row = db.prepare('SELECT COUNT(*) AS count FROM users WHERE is_active = 1').get();
       return row?.count || 0;
+    } catch (err) {
+      throw err;
+    }
+  },
+
+  getPublicId: (userId) => {
+    try {
+      const row = db.prepare('SELECT public_id AS publicId FROM users WHERE id = ?').get(userId);
+      return row?.publicId || null;
     } catch (err) {
       throw err;
     }
@@ -389,7 +440,7 @@ const apiKeysDb = {
   validateApiKey: (apiKey) => {
     try {
       const row = db.prepare(`
-        SELECT u.id, u.username, ak.id as api_key_id
+        SELECT u.id, u.username, u.public_id AS publicId, ak.id as api_key_id
         FROM api_keys ak
         JOIN users u ON ak.user_id = u.id
         WHERE ak.api_key = ? AND ak.is_active = 1 AND u.is_active = 1
@@ -702,6 +753,21 @@ const userProjectsDb = {
     const result = db.prepare('DELETE FROM user_projects WHERE user_id = ? AND project_name = ?').run(userId, projectName);
     return result.changes > 0;
   },
+
+  migrateProjectPathPrefix: (userId, oldPrefix, newPrefix) => {
+    const rows = db.prepare(
+      'SELECT id, project_path FROM user_projects WHERE user_id = ? AND (project_path = ? OR project_path LIKE ?)'
+    ).all(userId, oldPrefix, `${oldPrefix}${path.sep}%`);
+
+    for (const row of rows) {
+      const nextPath = row.project_path.replace(oldPrefix, newPrefix);
+      db.prepare(
+        'UPDATE user_projects SET project_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+      ).run(nextPath, row.id);
+    }
+
+    return rows.length;
+  },
 };
 
 // App config database operations
@@ -937,6 +1003,21 @@ const deliveryWorkflowsDb = {
         resolvedInAttempt: row.resolved_in_attempt,
         createdAt: row.created_at,
       }));
+  },
+
+  migrateProjectPathPrefix: (userId, oldPrefix, newPrefix) => {
+    const rows = db.prepare(
+      'SELECT id, project_path FROM delivery_workflows WHERE user_id = ? AND (project_path = ? OR project_path LIKE ?)'
+    ).all(userId, oldPrefix, `${oldPrefix}${path.sep}%`);
+
+    for (const row of rows) {
+      const nextPath = row.project_path.replace(oldPrefix, newPrefix);
+      db.prepare(
+        'UPDATE delivery_workflows SET project_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+      ).run(nextPath, row.id);
+    }
+
+    return rows.length;
   },
 };
 

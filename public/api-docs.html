@@ -457,6 +457,10 @@
                         <p>All API requests require authentication using an API key in the <code>X-API-Key</code> header.</p>
 
                         <p>Generate API keys in Settings → API & Tokens.</p>
+
+                        <div class="note">
+                            <strong>External user identity:</strong> Each API key belongs to the currently signed-in account. For external integrations, use that account's <code>publicId</code> as the stable user identifier. Do not use the internal numeric database user ID.
+                        </div>
                     </section>
 
                     <section id="credentials">

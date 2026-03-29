@@ -136,6 +136,7 @@ function MainContent({
                 sendByCtrlEnter={sendByCtrlEnter}
                 externalMessageUpdate={externalMessageUpdate}
                 onShowAllTasks={tasksEnabled ? () => setActiveTab('tasks') : null}
+                onOpenDeliveryTab={() => setActiveTab('delivery')}
               />
             </ErrorBoundary>
           </div>

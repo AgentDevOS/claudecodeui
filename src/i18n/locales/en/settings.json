@@ -242,7 +242,13 @@
   },
   "apiKeys": {
     "title": "API Keys",
-    "description": "Generate API keys to access the external API from other applications.",
+    "description": "Generate API keys to access the external API from other applications. External integrations should use your publicId as the user identifier, not the internal numeric database ID.",
+    "identity": {
+      "title": "External User Identity",
+      "description": "Use this stable publicId in external integrations and API-facing user mapping. It is intended for external use and replaces the internal numeric user ID in those scenarios.",
+      "label": "Public User ID",
+      "unavailable": "Unavailable"
+    },
     "newKey": {
       "alertTitle": "⚠️ Save Your API Key",
       "alertMessage": "This is the only time you'll see this key. Store it securely.",
@@ -284,7 +290,7 @@
     "apiDocsLink": "API Documentation",
     "documentation": {
       "title": "External API Documentation",
-      "description": "Learn how to use the external API to trigger Claude/Cursor sessions from your applications.",
+      "description": "Learn how to use the external API to trigger Claude/Cursor sessions from your applications and map requests to users via publicId.",
       "viewLink": "View API Documentation →"
     },
     "loading": "Loading...",

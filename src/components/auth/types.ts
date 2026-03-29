@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 
 export type AuthUser = {
   id?: number | string;
+  publicId?: string;
   username: string;
   [key: string]: unknown;
 };

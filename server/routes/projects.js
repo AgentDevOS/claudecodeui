@@ -5,6 +5,7 @@ import { spawn } from 'child_process';
 import crypto from 'crypto';
 import os from 'os';
 import { addProjectManually } from '../projects.js';
+import { deliveryWorkflowsDb, userDb, userProjectsDb } from '../database/db.js';
 
 const router = express.Router();
 
@@ -35,7 +36,7 @@ if (!existsSync(WORKSPACES_ROOT)) {
   mkdirSync(WORKSPACES_ROOT, { recursive: true });
 }
 
-export function getWorkspaceRootForUser(userId) {
+function getLegacyWorkspaceRootForUser(userId) {
   const normalizedUserId = String(userId ?? '').trim();
   if (!normalizedUserId) {
     throw new Error('A valid user ID is required to resolve the workspace root');
@@ -44,8 +45,31 @@ export function getWorkspaceRootForUser(userId) {
   return path.join(WORKSPACES_ROOT, 'users', normalizedUserId, 'workspaces');
 }
 
+export function getWorkspaceRootForUser(userId) {
+  const normalizedUserId = String(userId ?? '').trim();
+  if (!normalizedUserId) {
+    throw new Error('A valid user ID is required to resolve the workspace root');
+  }
+
+  const publicId = userDb.getPublicId(userId);
+  if (!publicId) {
+    throw new Error(`No public workspace identifier found for user ${normalizedUserId}`);
+  }
+
+  return path.join(WORKSPACES_ROOT, 'users', publicId, 'workspaces');
+}
+
 export async function ensureWorkspaceRootForUser(userId) {
+  const legacyWorkspaceRoot = getLegacyWorkspaceRootForUser(userId);
   const workspaceRoot = getWorkspaceRootForUser(userId);
+
+  if (legacyWorkspaceRoot !== workspaceRoot && existsSync(legacyWorkspaceRoot) && !existsSync(workspaceRoot)) {
+    await fs.mkdir(path.dirname(workspaceRoot), { recursive: true });
+    await fs.rename(legacyWorkspaceRoot, workspaceRoot);
+    userProjectsDb.migrateProjectPathPrefix(userId, legacyWorkspaceRoot, workspaceRoot);
+    deliveryWorkflowsDb.migrateProjectPathPrefix(userId, legacyWorkspaceRoot, workspaceRoot);
+  }
+
   await fs.mkdir(workspaceRoot, { recursive: true });
   return workspaceRoot;
 }

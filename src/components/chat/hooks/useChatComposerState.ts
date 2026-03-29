@@ -11,7 +11,6 @@ import type {
 } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { authenticatedFetch } from '../../../utils/api';
-import { thinkingModes } from '../constants/thinkingModes';
 import { grantClaudeToolPermission } from '../utils/chatPermissions';
 import { safeLocalStorage } from '../utils/chatStorage';
 import type {
@@ -49,6 +48,7 @@ interface UseChatComposerStateArgs {
   onInputFocusChange?: (focused: boolean) => void;
   onFileOpen?: (filePath: string, diffInfo?: unknown) => void;
   onShowSettings?: () => void;
+  onOpenDeliveryTab?: () => void;
   pendingViewSessionRef: { current: PendingViewSession | null };
   scrollToBottom: () => void;
   addMessage: (msg: ChatMessage) => void;
@@ -115,6 +115,7 @@ export function useChatComposerState({
   onInputFocusChange,
   onFileOpen,
   onShowSettings,
+  onOpenDeliveryTab,
   pendingViewSessionRef,
   scrollToBottom,
   addMessage,
@@ -444,187 +445,99 @@ export function useChatComposerState({
         return;
       }
 
-      let messageContent = currentInput;
-      const selectedThinkingMode = thinkingModes.find((mode: { id: string; prefix?: string }) => mode.id === thinkingMode);
-      if (selectedThinkingMode && selectedThinkingMode.prefix) {
-        messageContent = `${selectedThinkingMode.prefix}: ${currentInput}`;
-      }
-
-      let uploadedImages: unknown[] = [];
       if (attachedImages.length > 0) {
-        const formData = new FormData();
-        attachedImages.forEach((file) => {
-          formData.append('images', file);
+        addMessage({
+          type: 'error',
+          content: 'Delivery workflow submission does not support image attachments yet. Remove the images and submit the requirement text again.',
+          timestamp: new Date(),
         });
-
-        try {
-          const response = await authenticatedFetch(`/api/projects/${selectedProject.name}/upload-images`, {
-            method: 'POST',
-            headers: {},
-            body: formData,
-          });
-
-          if (!response.ok) {
-            throw new Error('Failed to upload images');
-          }
-
-          const result = await response.json();
-          uploadedImages = result.images;
-        } catch (error) {
-          const message = error instanceof Error ? error.message : 'Unknown error';
-          console.error('Image upload failed:', error);
-          addMessage({
-            type: 'error',
-            content: `Failed to upload images: ${message}`,
-            timestamp: new Date(),
-          });
-          return;
-        }
+        return;
       }
 
-      const effectiveSessionId =
-        currentSessionId || selectedSession?.id || sessionStorage.getItem('cursorSessionId');
-      const sessionToActivate = effectiveSessionId || `new-session-${Date.now()}`;
+      const messageContent = currentInput;
 
       const userMessage: ChatMessage = {
         type: 'user',
         content: currentInput,
-        images: uploadedImages as any,
         timestamp: new Date(),
       };
 
       addMessage(userMessage);
-      setIsLoading(true); // Processing banner starts
-      setCanAbortSession(true);
+      setIsLoading(true);
+      setCanAbortSession(false);
       setClaudeStatus({
-        text: 'Processing',
+        text: 'Creating delivery workflow',
         tokens: 0,
-        can_interrupt: true,
+        can_interrupt: false,
       });
 
       setIsUserScrolledUp(false);
       setTimeout(() => scrollToBottom(), 100);
-
-      if (!effectiveSessionId && !selectedSession?.id) {
-        if (typeof window !== 'undefined') {
-          // Reset stale pending IDs from previous interrupted runs before creating a new one.
-          sessionStorage.removeItem('pendingSessionId');
-        }
-        pendingViewSessionRef.current = { sessionId: null, startedAt: Date.now() };
-      }
-      onSessionActive?.(sessionToActivate);
-      if (effectiveSessionId && !isTemporarySessionId(effectiveSessionId)) {
-        onSessionProcessing?.(effectiveSessionId);
-      }
-
-      const getToolsSettings = () => {
-        try {
-          const settingsKey =
-            provider === 'cursor'
-              ? 'cursor-tools-settings'
-              : provider === 'codex'
-                ? 'codex-settings'
-                : provider === 'gemini'
-                  ? 'gemini-settings'
-                  : 'claude-settings';
-          const savedSettings = safeLocalStorage.getItem(settingsKey);
-          if (savedSettings) {
-            return JSON.parse(savedSettings);
-          }
-        } catch (error) {
-          console.error('Error loading tools settings:', error);
-        }
-
-        return {
-          allowedTools: [],
-          disallowedTools: [],
-          skipPermissions: false,
-        };
-      };
-
-      const toolsSettings = getToolsSettings();
       const resolvedProjectPath = selectedProject.fullPath || selectedProject.path || '';
-      const sessionSummary = getNotificationSessionSummary(selectedSession, currentInput);
-
-      if (provider === 'cursor') {
-        sendMessage({
-          type: 'cursor-command',
-          command: messageContent,
-          sessionId: effectiveSessionId,
-          options: {
-            cwd: resolvedProjectPath,
-            projectPath: resolvedProjectPath,
-            sessionId: effectiveSessionId,
-            resume: Boolean(effectiveSessionId),
-            model: cursorModel,
-            skipPermissions: toolsSettings?.skipPermissions || false,
-            sessionSummary,
-            toolsSettings,
-          },
+      if (!resolvedProjectPath) {
+        addMessage({
+          type: 'error',
+          content: 'Cannot create a delivery workflow because the project path is unavailable.',
+          timestamp: new Date(),
         });
-      } else if (provider === 'codex') {
-        sendMessage({
-          type: 'codex-command',
-          command: messageContent,
-          sessionId: effectiveSessionId,
-          options: {
-            cwd: resolvedProjectPath,
-            projectPath: resolvedProjectPath,
-            sessionId: effectiveSessionId,
-            resume: Boolean(effectiveSessionId),
-            model: codexModel,
-            sessionSummary,
-            permissionMode: permissionMode === 'plan' ? 'default' : permissionMode,
-          },
-        });
-      } else if (provider === 'gemini') {
-        sendMessage({
-          type: 'gemini-command',
-          command: messageContent,
-          sessionId: effectiveSessionId,
-          options: {
-            cwd: resolvedProjectPath,
-            projectPath: resolvedProjectPath,
-            sessionId: effectiveSessionId,
-            resume: Boolean(effectiveSessionId),
-            model: geminiModel,
-            sessionSummary,
-            permissionMode,
-            toolsSettings,
-          },
-        });
-      } else {
-        sendMessage({
-          type: 'claude-command',
-          command: messageContent,
-          options: {
-            projectPath: resolvedProjectPath,
-            cwd: resolvedProjectPath,
-            sessionId: effectiveSessionId,
-            resume: Boolean(effectiveSessionId),
-            toolsSettings,
-            permissionMode,
-            model: claudeModel,
-            sessionSummary,
-            images: uploadedImages,
-          },
-        });
+        setIsLoading(false);
+        setCanAbortSession(false);
+        setClaudeStatus(null);
+        return;
       }
 
-      setInput('');
-      inputValueRef.current = '';
-      resetCommandMenuState();
-      setAttachedImages([]);
-      setUploadingImages(new Map());
-      setImageErrors(new Map());
-      setIsTextareaExpanded(false);
-      setThinkingMode('none');
+      try {
+        const response = await authenticatedFetch('/api/delivery', {
+          method: 'POST',
+          body: JSON.stringify({
+            projectName: selectedProject.name,
+            projectPath: resolvedProjectPath,
+            title: getNotificationSessionSummary(selectedSession, currentInput) || undefined,
+            requirementText: messageContent,
+            provider: 'codex',
+          }),
+        });
 
-      if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(result.error || `Failed to create delivery workflow (${response.status})`);
+        }
+
+        addMessage({
+          type: 'assistant',
+          content: 'Delivery workflow created. Continue in the Delivery tab to review requirements, confirm the prototype, and proceed to development.',
+          timestamp: new Date(),
+        });
+
+        onOpenDeliveryTab?.();
+
+        setInput('');
+        inputValueRef.current = '';
+        resetCommandMenuState();
+        setAttachedImages([]);
+        setUploadingImages(new Map());
+        setImageErrors(new Map());
+        setIsTextareaExpanded(false);
+        setThinkingMode('none');
+
+        if (textareaRef.current) {
+          textareaRef.current.style.height = 'auto';
+        }
+
+        safeLocalStorage.removeItem(`draft_input_${selectedProject.name}`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        console.error('Failed to create delivery workflow:', error);
+        addMessage({
+          type: 'error',
+          content: `Failed to create delivery workflow: ${message}`,
+          timestamp: new Date(),
+        });
+      } finally {
+        setIsLoading(false);
+        setCanAbortSession(false);
+        setClaudeStatus(null);
       }
-
-      safeLocalStorage.removeItem(`draft_input_${selectedProject.name}`);
     },
     [
       selectedSession,
@@ -637,19 +550,16 @@ export function useChatComposerState({
       isLoading,
       onSessionActive,
       onSessionProcessing,
+      onOpenDeliveryTab,
       pendingViewSessionRef,
-      permissionMode,
-      provider,
       resetCommandMenuState,
       scrollToBottom,
       selectedProject,
-      sendMessage,
       setCanAbortSession,
       addMessage,
       setClaudeStatus,
       setIsLoading,
       setIsUserScrolledUp,
-      thinkingMode,
     ],
   );
 

@@ -60,7 +60,7 @@ router.post('/register', async (req, res) => {
 
       res.json({
         success: true,
-        user: { id: user.id, username: user.username },
+        user: { id: user.id, publicId: user.publicId, username: user.username },
         token
       });
     } catch (error) {
@@ -108,7 +108,7 @@ router.post('/login', async (req, res) => {
     
     res.json({
       success: true,
-      user: { id: user.id, username: user.username },
+      user: { id: user.id, publicId: user.publicId, username: user.username },
       token
     });
     

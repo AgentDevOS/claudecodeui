@@ -242,7 +242,13 @@
   },
   "apiKeys": {
     "title": "APIキー",
-    "description": "外部APIにアクセスするためのAPIキーを生成します。",
+    "description": "外部APIにアクセスするためのAPIキーを生成します。外部連携では内部の数値ユーザーIDではなく publicId を使用してください。",
+    "identity": {
+      "title": "外部ユーザー識別子",
+      "description": "この安定した publicId を外部連携や API 側のユーザーマッピングに使用してください。外部識別では内部の数値ユーザーIDの代わりになります。",
+      "label": "Public User ID",
+      "unavailable": "利用不可"
+    },
     "newKey": {
       "alertTitle": "⚠️ APIキーを保存してください",
       "alertMessage": "このキーが表示されるのは今回限りです。安全な場所に保管してください。",
@@ -284,7 +290,7 @@
     "apiDocsLink": "APIドキュメント",
     "documentation": {
       "title": "外部APIドキュメント",
-      "description": "外部APIを使用してアプリケーションからClaude/Cursorセッションを起動する方法を学びます。",
+      "description": "外部APIを使用してアプリケーションからClaude/Cursorセッションを起動し、publicId でユーザーに紐付ける方法を確認できます。",
       "viewLink": "APIドキュメントを見る →"
     },
     "loading": "読み込み中...",

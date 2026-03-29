@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Project } from '../../../types/app';
 import { api } from '../../../utils/api';
@@ -60,13 +60,21 @@ function classNames(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(' ');
 }
 
-function formatTimestamp(value?: string) {
+function getStageLabel(stage: string, t: (key: string, options?: Record<string, unknown>) => string) {
+  return t(`deliveryWorkflow.stages.${stage}`, { defaultValue: STAGE_LABELS[stage] || stage });
+}
+
+function getStatusLabel(status: string, t: (key: string, options?: Record<string, unknown>) => string) {
+  return t(`deliveryWorkflow.statuses.${status}`, { defaultValue: STATUS_LABELS[status] || status });
+}
+
+function formatTimestamp(value?: string, locale?: string) {
   if (!value) {
     return 'Unknown';
   }
 
   try {
-    return new Date(value).toLocaleString();
+    return new Date(value).toLocaleString(locale);
   } catch {
     return value;
   }
@@ -88,6 +96,7 @@ function getStatusTone(status: string) {
 }
 
 function WorkflowLinks({ workflow }: { workflow: DeliveryWorkflow }) {
+  const { t } = useTranslation('common');
   const prototypeUrl = workflow.data?.publicUrls?.prototypePreview;
   const uatUrl = workflow.data?.uat?.previewUrl || workflow.data?.publicUrls?.uatPreview;
   const runtimeUrl = workflow.data?.uat?.runtimeUrl || workflow.data?.publicUrls?.runtime;
@@ -96,17 +105,17 @@ function WorkflowLinks({ workflow }: { workflow: DeliveryWorkflow }) {
     <div className="grid gap-2">
       {prototypeUrl && (
         <a className="text-sm text-blue-600 hover:underline dark:text-blue-400" href={prototypeUrl} target="_blank" rel="noreferrer">
-          Prototype Preview
+          {t('deliveryWorkflow.links.prototypePreview')}
         </a>
       )}
       {uatUrl && workflow.stage !== 'requirement' && (
         <a className="text-sm text-blue-600 hover:underline dark:text-blue-400" href={uatUrl} target="_blank" rel="noreferrer">
-          UAT Preview
+          {t('deliveryWorkflow.links.uatPreview')}
         </a>
       )}
       {runtimeUrl && workflow.stage !== 'requirement' && workflow.stage !== 'prototype' && (
         <a className="text-sm text-blue-600 hover:underline dark:text-blue-400" href={runtimeUrl} target="_blank" rel="noreferrer">
-          Runtime Endpoint
+          {t('deliveryWorkflow.links.runtimeEndpoint')}
         </a>
       )}
     </div>
@@ -114,7 +123,7 @@ function WorkflowLinks({ workflow }: { workflow: DeliveryWorkflow }) {
 }
 
 export default function DeliveryWorkflowPanel({ selectedProject, latestMessage }: DeliveryWorkflowPanelProps) {
-  const { t } = useTranslation('common');
+  const { t, i18n } = useTranslation('common');
   const [workflows, setWorkflows] = useState<DeliveryWorkflow[]>([]);
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
   const [selectedWorkflow, setSelectedWorkflow] = useState<DeliveryWorkflow | null>(null);
@@ -125,8 +134,13 @@ export default function DeliveryWorkflowPanel({ selectedProject, latestMessage }
   const [requirementText, setRequirementText] = useState('');
   const [feedbackText, setFeedbackText] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const selectedWorkflowIdRef = useRef<string | null>(null);
 
   const selectedProjectPath = selectedProject.path || selectedProject.fullPath;
+
+  useEffect(() => {
+    selectedWorkflowIdRef.current = selectedWorkflowId;
+  }, [selectedWorkflowId]);
 
   const refreshWorkflows = useCallback(async (preserveSelection = true) => {
     setIsLoadingList(true);
@@ -136,20 +150,22 @@ export default function DeliveryWorkflowPanel({ selectedProject, latestMessage }
       const nextWorkflows = (data.workflows || []) as DeliveryWorkflow[];
       setWorkflows(nextWorkflows);
 
+      const currentSelectedId = selectedWorkflowIdRef.current;
       const nextSelectedId = preserveSelection
-        ? selectedWorkflowId && nextWorkflows.some((workflow) => workflow.id === selectedWorkflowId)
-          ? selectedWorkflowId
+        ? currentSelectedId && nextWorkflows.some((workflow) => workflow.id === currentSelectedId)
+          ? currentSelectedId
           : nextWorkflows[0]?.id || null
         : nextWorkflows[0]?.id || null;
 
-      setSelectedWorkflowId(nextSelectedId);
+      selectedWorkflowIdRef.current = nextSelectedId;
+      setSelectedWorkflowId((current) => (current === nextSelectedId ? current : nextSelectedId));
       setError(null);
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : 'Failed to load workflows');
     } finally {
       setIsLoadingList(false);
     }
-  }, [selectedProject.name, selectedWorkflowId]);
+  }, [selectedProject.name]);
 
   const refreshSelectedWorkflow = useCallback(async (workflowId: string | null) => {
     if (!workflowId) {
@@ -297,9 +313,9 @@ export default function DeliveryWorkflowPanel({ selectedProject, latestMessage }
         <div className="rounded-xl border border-border/60 bg-card p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-base font-semibold text-foreground">Delivery Workflow</h2>
+              <h2 className="text-base font-semibold text-foreground">{t('deliveryWorkflow.title')}</h2>
               <p className="text-sm text-muted-foreground">
-                Run requirement review, prototype generation, development, and UAT from one project workflow.
+                {t('deliveryWorkflow.description')}
               </p>
             </div>
             <button
@@ -315,13 +331,13 @@ export default function DeliveryWorkflowPanel({ selectedProject, latestMessage }
           <div className="grid gap-3 md:grid-cols-[220px_minmax(0,1fr)_auto]">
             <input
               className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-ring"
-              placeholder="Workflow title"
+              placeholder={t('deliveryWorkflow.titlePlaceholder')}
               value={title}
               onChange={(event) => setTitle(event.target.value)}
             />
             <textarea
               className="min-h-28 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-ring"
-              placeholder="Describe the feature or product request that should enter the delivery workflow."
+              placeholder={t('deliveryWorkflow.requirementPlaceholder')}
               value={requirementText}
               onChange={(event) => setRequirementText(event.target.value)}
             />
@@ -331,7 +347,7 @@ export default function DeliveryWorkflowPanel({ selectedProject, latestMessage }
               onClick={() => void handleCreateWorkflow()}
               disabled={isSubmitting || !requirementText.trim()}
             >
-              {isSubmitting ? 'Starting…' : t('buttons.create')}
+              {isSubmitting ? t('deliveryWorkflow.starting') : t('buttons.create')}
             </button>
           </div>
           {error && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
@@ -339,16 +355,16 @@ export default function DeliveryWorkflowPanel({ selectedProject, latestMessage }
 
         <div className="grid min-h-[560px] gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
           <div className="rounded-xl border border-border/60 bg-card p-3">
-            <div className="mb-3 text-sm font-medium text-foreground">Workflows</div>
+            <div className="mb-3 text-sm font-medium text-foreground">{t('deliveryWorkflow.workflowsTitle')}</div>
             <div className="space-y-2">
               {isLoadingList && workflows.length === 0 && (
                 <div className="rounded-lg border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
-                  Loading workflows…
+                  {t('deliveryWorkflow.loadingWorkflows')}
                 </div>
               )}
               {!isLoadingList && workflows.length === 0 && (
                 <div className="rounded-lg border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
-                  No workflows yet for this project.
+                  {t('deliveryWorkflow.emptyWorkflows')}
                 </div>
               )}
               {workflows.map((workflow) => (
@@ -364,12 +380,12 @@ export default function DeliveryWorkflowPanel({ selectedProject, latestMessage }
                   onClick={() => setSelectedWorkflowId(workflow.id)}
                 >
                   <div className="truncate text-sm font-medium text-foreground">
-                    {workflow.title || workflow.latestSummary || 'Untitled workflow'}
+                    {workflow.title || workflow.latestSummary || t('deliveryWorkflow.untitledWorkflow')}
                   </div>
                   <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                    <span>{STAGE_LABELS[workflow.stage] || workflow.stage}</span>
+                    <span>{getStageLabel(workflow.stage, t)}</span>
                     <span className={classNames('rounded-full px-2 py-0.5', getStatusTone(workflow.status))}>
-                      {STATUS_LABELS[workflow.status] || workflow.status}
+                      {getStatusLabel(workflow.status, t)}
                     </span>
                   </div>
                 </button>
@@ -380,7 +396,7 @@ export default function DeliveryWorkflowPanel({ selectedProject, latestMessage }
           <div className="rounded-xl border border-border/60 bg-card p-4">
             {!selectedWorkflow && (
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                {isLoadingDetail ? 'Loading workflow…' : 'Select a workflow to inspect stage outputs.'}
+                {isLoadingDetail ? t('deliveryWorkflow.loadingWorkflow') : t('deliveryWorkflow.selectWorkflow')}
               </div>
             )}
 
@@ -389,14 +405,14 @@ export default function DeliveryWorkflowPanel({ selectedProject, latestMessage }
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h3 className="text-lg font-semibold text-foreground">
-                      {selectedWorkflow.title || selectedWorkflow.latestSummary || 'Untitled workflow'}
+                      {selectedWorkflow.title || selectedWorkflow.latestSummary || t('deliveryWorkflow.untitledWorkflow')}
                     </h3>
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                      <span>{STAGE_LABELS[selectedWorkflow.stage] || selectedWorkflow.stage}</span>
+                      <span>{getStageLabel(selectedWorkflow.stage, t)}</span>
                       <span className={classNames('rounded-full px-2 py-0.5', getStatusTone(selectedWorkflow.status))}>
-                        {STATUS_LABELS[selectedWorkflow.status] || selectedWorkflow.status}
+                        {getStatusLabel(selectedWorkflow.status, t)}
                       </span>
-                      <span>Updated {formatTimestamp(selectedWorkflow.updatedAt)}</span>
+                      <span>{t('deliveryWorkflow.updatedAt', { timestamp: formatTimestamp(selectedWorkflow.updatedAt, i18n.language) })}</span>
                     </div>
                   </div>
 
@@ -418,7 +434,7 @@ export default function DeliveryWorkflowPanel({ selectedProject, latestMessage }
                         onClick={() => void handleComplete()}
                         disabled={isSubmitting}
                       >
-                        Mark Delivered
+                        {t('deliveryWorkflow.markDelivered')}
                       </button>
                     )}
                   </div>
@@ -439,7 +455,7 @@ export default function DeliveryWorkflowPanel({ selectedProject, latestMessage }
                 <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
                   <div className="space-y-4">
                     <div className="rounded-lg border border-border/60 p-4">
-                      <div className="mb-2 text-sm font-medium text-foreground">Requirement</div>
+                      <div className="mb-2 text-sm font-medium text-foreground">{t('deliveryWorkflow.sections.requirement')}</div>
                       {requirementDetails ? (
                         <div className="space-y-2 text-sm text-foreground">
                           <div>{requirementDetails.summary}</div>
@@ -452,12 +468,12 @@ export default function DeliveryWorkflowPanel({ selectedProject, latestMessage }
                           )}
                         </div>
                       ) : (
-                        <div className="text-sm text-muted-foreground">Requirement summary will appear after the first Codex pass completes.</div>
+                        <div className="text-sm text-muted-foreground">{t('deliveryWorkflow.emptyStates.requirement')}</div>
                       )}
                     </div>
 
                     <div className="rounded-lg border border-border/60 p-4">
-                      <div className="mb-2 text-sm font-medium text-foreground">Prototype</div>
+                      <div className="mb-2 text-sm font-medium text-foreground">{t('deliveryWorkflow.sections.prototype')}</div>
                       {prototypeDetails ? (
                         <div className="space-y-2 text-sm text-foreground">
                           <div>{prototypeDetails.summary}</div>
@@ -470,12 +486,12 @@ export default function DeliveryWorkflowPanel({ selectedProject, latestMessage }
                           )}
                         </div>
                       ) : (
-                        <div className="text-sm text-muted-foreground">Prototype notes will appear after the prototype stage finishes.</div>
+                        <div className="text-sm text-muted-foreground">{t('deliveryWorkflow.emptyStates.prototype')}</div>
                       )}
                     </div>
 
                     <div className="rounded-lg border border-border/60 p-4">
-                      <div className="mb-2 text-sm font-medium text-foreground">Verification</div>
+                      <div className="mb-2 text-sm font-medium text-foreground">{t('deliveryWorkflow.sections.verification')}</div>
                       {testResults.length > 0 ? (
                         <div className="space-y-2">
                           {testResults.map((result: { name: string; status: string; details?: string }) => (
@@ -488,16 +504,16 @@ export default function DeliveryWorkflowPanel({ selectedProject, latestMessage }
                           ))}
                         </div>
                       ) : (
-                        <div className="text-sm text-muted-foreground">Test and build results will appear after development runs.</div>
+                        <div className="text-sm text-muted-foreground">{t('deliveryWorkflow.emptyStates.verification')}</div>
                       )}
                     </div>
 
                     {canSubmitFeedback && (
                       <div className="rounded-lg border border-border/60 p-4">
-                        <div className="mb-2 text-sm font-medium text-foreground">UAT Feedback</div>
+                        <div className="mb-2 text-sm font-medium text-foreground">{t('deliveryWorkflow.sections.uatFeedback')}</div>
                         <textarea
                           className="min-h-28 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-ring"
-                          placeholder="Describe defects, adjustments, or follow-up requests from UAT."
+                          placeholder={t('deliveryWorkflow.uatFeedbackPlaceholder')}
                           value={feedbackText}
                           onChange={(event) => setFeedbackText(event.target.value)}
                         />
@@ -517,21 +533,21 @@ export default function DeliveryWorkflowPanel({ selectedProject, latestMessage }
 
                   <div className="space-y-4">
                     <div className="rounded-lg border border-border/60 p-4">
-                      <div className="mb-2 text-sm font-medium text-foreground">Links</div>
+                      <div className="mb-2 text-sm font-medium text-foreground">{t('deliveryWorkflow.sections.links')}</div>
                       <WorkflowLinks workflow={selectedWorkflow} />
                     </div>
 
                     <div className="rounded-lg border border-border/60 p-4">
-                      <div className="mb-2 text-sm font-medium text-foreground">Timeline</div>
+                      <div className="mb-2 text-sm font-medium text-foreground">{t('deliveryWorkflow.sections.timeline')}</div>
                       <div className="space-y-2">
                         {(selectedWorkflow.events || []).length === 0 && (
-                          <div className="text-sm text-muted-foreground">No events yet.</div>
+                          <div className="text-sm text-muted-foreground">{t('deliveryWorkflow.noEvents')}</div>
                         )}
                         {(selectedWorkflow.events || []).map((event) => (
                           <div key={event.id} className="rounded-md bg-muted/50 px-3 py-2 text-sm">
                             <div className="font-medium text-foreground">{event.summary || event.eventType}</div>
                             <div className="text-xs text-muted-foreground">
-                              {STAGE_LABELS[event.stage] || event.stage} · {formatTimestamp(event.createdAt)}
+                              {getStageLabel(event.stage, t)} · {formatTimestamp(event.createdAt, i18n.language)}
                             </div>
                           </div>
                         ))}
@@ -539,15 +555,15 @@ export default function DeliveryWorkflowPanel({ selectedProject, latestMessage }
                     </div>
 
                     <div className="rounded-lg border border-border/60 p-4">
-                      <div className="mb-2 text-sm font-medium text-foreground">Submitted Feedback</div>
+                      <div className="mb-2 text-sm font-medium text-foreground">{t('deliveryWorkflow.sections.submittedFeedback')}</div>
                       <div className="space-y-2">
                         {(selectedWorkflow.feedback || []).length === 0 && (
-                          <div className="text-sm text-muted-foreground">No UAT feedback submitted yet.</div>
+                          <div className="text-sm text-muted-foreground">{t('deliveryWorkflow.noFeedback')}</div>
                         )}
                         {(selectedWorkflow.feedback || []).map((item) => (
                           <div key={item.id} className="rounded-md bg-muted/50 px-3 py-2 text-sm">
                             <div className="text-foreground">{item.content}</div>
-                            <div className="mt-1 text-xs text-muted-foreground">{formatTimestamp(item.createdAt)}</div>
+                            <div className="mt-1 text-xs text-muted-foreground">{formatTimestamp(item.createdAt, i18n.language)}</div>
                           </div>
                         ))}
                       </div>

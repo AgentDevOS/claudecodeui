@@ -9,7 +9,9 @@
     "copied": "消息已复制",
     "selectFormat": "选择复制格式",
     "copyAsMarkdown": "复制为 Markdown",
-    "copyAsText": "复制为纯文本"
+    "copyAsText": "复制为纯文本",
+    "markdownShort": "MD",
+    "textShort": "文本"
   },
   "messageTypes": {
     "user": "U",

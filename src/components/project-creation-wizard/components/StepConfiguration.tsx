@@ -46,7 +46,7 @@ export default function StepConfiguration({
     <div className="space-y-4">
       <div>
         <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-          {t('projectWizard.step2.workspaceName', { defaultValue: 'Workspace Name' })}
+          {t('projectWizard.step2.workspaceName', { defaultValue: 'Project Name' })}
         </label>
 
         <Input
@@ -62,7 +62,7 @@ export default function StepConfiguration({
 
         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
           {t('projectWizard.step2.workspaceNameHelp', {
-            defaultValue: 'Used as the workspace display name. The storage path is allocated automatically.',
+            defaultValue: 'Used as the project display name. The storage path is allocated automatically.',
           })}
         </p>
       </div>

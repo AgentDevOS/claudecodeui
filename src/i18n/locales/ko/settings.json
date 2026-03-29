@@ -242,7 +242,13 @@
   },
   "apiKeys": {
     "title": "API 키",
-    "description": "다른 애플리케이션에서 외부 API에 접근하기 위한 API 키를 생성합니다.",
+    "description": "다른 애플리케이션에서 외부 API에 접근하기 위한 API 키를 생성합니다. 외부 연동에서는 내부 숫자 사용자 ID 대신 publicId를 사용해야 합니다.",
+    "identity": {
+      "title": "외부 사용자 식별자",
+      "description": "이 안정적인 publicId를 외부 연동과 API 측 사용자 매핑에 사용하세요. 외부 식별에서는 내부 숫자 사용자 ID를 대체합니다.",
+      "label": "Public User ID",
+      "unavailable": "사용할 수 없음"
+    },
     "newKey": {
       "alertTitle": "⚠️ API 키를 저장하세요",
       "alertMessage": "이 키는 지금만 볼 수 있습니다. 안전하게 보관하세요.",
@@ -284,7 +290,7 @@
     "apiDocsLink": "API 문서",
     "documentation": {
       "title": "외부 API 문서",
-      "description": "외부 API를 사용하여 애플리케이션에서 Claude/Cursor 세션을 트리거하는 방법을 알아보세요.",
+      "description": "외부 API를 사용하여 애플리케이션에서 Claude/Cursor 세션을 실행하고 publicId로 사용자를 매핑하는 방법을 알아보세요.",
       "viewLink": "API 문서 보기 →"
     },
     "loading": "로딩 중...",

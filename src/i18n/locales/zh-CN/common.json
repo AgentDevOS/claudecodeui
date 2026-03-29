@@ -84,6 +84,58 @@
     "copyPath": "复制路径",
     "openInEditor": "在编辑器中打开"
   },
+  "deliveryWorkflow": {
+    "title": "交付工作流",
+    "description": "在一个项目工作流里完成需求评审、原型生成、开发和 UAT 验证。",
+    "titlePlaceholder": "工作流标题",
+    "requirementPlaceholder": "描述要进入交付工作流的功能需求或产品请求。",
+    "starting": "启动中…",
+    "workflowsTitle": "工作流",
+    "loadingWorkflows": "正在加载工作流…",
+    "emptyWorkflows": "当前项目还没有工作流。",
+    "loadingWorkflow": "正在加载工作流详情…",
+    "selectWorkflow": "选择一个工作流以查看各阶段输出。",
+    "untitledWorkflow": "未命名工作流",
+    "updatedAt": "更新于 {{timestamp}}",
+    "markDelivered": "标记为已交付",
+    "uatFeedbackPlaceholder": "填写 UAT 中发现的问题、需要调整的地方或后续需求。",
+    "noEvents": "暂无事件。",
+    "noFeedback": "暂未提交 UAT 反馈。",
+    "sections": {
+      "requirement": "需求",
+      "prototype": "原型",
+      "verification": "验证",
+      "uatFeedback": "UAT 反馈",
+      "links": "链接",
+      "timeline": "时间线",
+      "submittedFeedback": "已提交反馈"
+    },
+    "emptyStates": {
+      "requirement": "第一次 Codex 处理完成后，这里会显示需求摘要。",
+      "prototype": "原型阶段完成后，这里会显示原型说明。",
+      "verification": "开发执行测试和构建后，这里会显示验证结果。"
+    },
+    "links": {
+      "prototypePreview": "原型预览",
+      "uatPreview": "UAT 预览",
+      "runtimeEndpoint": "运行时地址"
+    },
+    "stages": {
+      "requirement": "需求",
+      "prototype": "原型",
+      "development": "开发",
+      "uat": "UAT",
+      "delivery": "交付"
+    },
+    "statuses": {
+      "queued": "排队中",
+      "running": "执行中",
+      "waiting_confirm": "等待确认",
+      "waiting_feedback": "等待 UAT 反馈",
+      "failed": "失败",
+      "completed": "已完成"
+    }
+  },
   "mainContent": {
     "loading": "正在加载 Claude Code UI",
     "settingUpWorkspace": "正在设置您的工作空间...",
@@ -151,9 +203,9 @@
       }
     },
     "step2": {
-      "workspaceName": "工作区名称",
+      "workspaceName": "项目名称",
       "workspaceNamePlaceholder": "frontend-team",
-      "workspaceNameHelp": "仅作为工作区显示名使用，实际存储路径会自动分配。",
+      "workspaceNameHelp": "仅作为项目显示名使用，实际存储路径会自动分配。",
       "existingPlaceholder": "/path/to/existing/workspace",
       "newPlaceholder": "/path/to/new/workspace",
       "existingHelp": "您现有工作区目录的完整路径",
@@ -181,7 +233,7 @@
       "workspaceType": "工作区类型：",
       "existingWorkspace": "空白工作区",
       "newWorkspace": "从仓库创建",
-      "workspaceName": "工作区名称：",
+      "workspaceName": "项目名称：",
       "path": "路径：",
       "storagePath": "存储位置：",
       "autoManagedLocation": "系统会在隔离工作区目录中自动分配",
@@ -206,7 +258,7 @@
     },
     "errors": {
       "selectType": "请选择要创建空白工作区，还是从仓库开始",
-      "provideWorkspaceName": "请提供工作区名称",
+      "provideWorkspaceName": "请提供项目名称",
       "failedToCreate": "创建工作区失败",
       "failedToCreateFolder": "创建文件夹失败"
     }

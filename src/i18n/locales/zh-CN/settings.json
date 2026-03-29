@@ -242,7 +242,13 @@
   },
   "apiKeys": {
     "title": "API 密钥",
-    "description": "生成 API 密钥以从其他应用访问外部 API。",
+    "description": "生成 API 密钥以从其他应用访问外部 API。对外集成请使用 publicId 作为用户标识，不要使用内部数字自增 ID。",
+    "identity": {
+      "title": "对外用户标识",
+      "description": "在开放接口、第三方系统映射和外部集成中，请使用这个稳定的 publicId。它面向外部使用，用来替代内部数字用户 ID。",
+      "label": "Public User ID",
+      "unavailable": "暂不可用"
+    },
     "newKey": {
       "alertTitle": "⚠️ 保存您的 API 密钥",
       "alertMessage": "这是您唯一一次看到此密钥。请妥善保存。",
@@ -284,7 +290,7 @@
     "apiDocsLink": "API 文档",
     "documentation": {
       "title": "外部 API 文档",
-      "description": "了解如何使用外部 API 从您的应用程序触发 Claude/Cursor 会话。",
+      "description": "了解如何使用外部 API 从您的应用程序触发 Claude/Cursor 会话，并通过 publicId 做用户映射。",
       "viewLink": "查看 API 文档 →"
     },
     "loading": "加载中...",

@@ -41,6 +41,7 @@ function ChatInterface({
   sendByCtrlEnter,
   externalMessageUpdate,
   onShowAllTasks,
+  onOpenDeliveryTab,
 }: ChatInterfaceProps) {
   const { tasksEnabled, isTaskMasterInstalled } = useTasksSettings();
   const { t } = useTranslation('chat');
@@ -169,6 +170,7 @@ function ChatInterface({
     onInputFocusChange,
     onFileOpen,
     onShowSettings,
+    onOpenDeliveryTab,
     pendingViewSessionRef,
     scrollToBottom,
     addMessage,

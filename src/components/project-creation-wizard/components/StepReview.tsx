@@ -65,7 +65,7 @@ export default function StepReview({
 
           <div className="flex justify-between text-sm">
             <span className="text-gray-600 dark:text-gray-400">
-              {t('projectWizard.step3.workspaceName', { defaultValue: 'Workspace Name:' })}
+              {t('projectWizard.step3.workspaceName', { defaultValue: 'Project Name:' })}
             </span>
             <span className="break-all font-mono text-xs text-gray-900 dark:text-white">
               {formState.workspacePath}

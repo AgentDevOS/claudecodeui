@@ -221,7 +221,13 @@
   },
   "apiKeys": {
     "title": "API-Schlüssel",
-    "description": "Generiere API-Schlüssel, um von anderen Anwendungen auf die externe API zuzugreifen.",
+    "description": "Generiere API-Schlüssel für den Zugriff auf die externe API. Externe Integrationen sollten die publicId statt der internen numerischen Benutzer-ID verwenden.",
+    "identity": {
+      "title": "Öffentliche Benutzerkennung",
+      "description": "Verwende diese stabile publicId für externe Integrationen und API-seitige Benutzerzuordnung. Sie ersetzt dort die interne numerische Benutzer-ID.",
+      "label": "Public User ID",
+      "unavailable": "Nicht verfügbar"
+    },
     "newKey": {
       "alertTitle": "⚠️ API-Schlüssel speichern",
       "alertMessage": "Dies ist das einzige Mal, dass du diesen Schlüssel siehst. Speichere ihn sicher.",
@@ -263,7 +269,7 @@
     "apiDocsLink": "API-Dokumentation",
     "documentation": {
       "title": "Externe API-Dokumentation",
-      "description": "Erfahre, wie du die externe API nutzen kannst, um Claude/Cursor-Sitzungen aus deinen Anwendungen heraus zu starten.",
+      "description": "Erfahre, wie du die externe API nutzen kannst, um Claude/Cursor-Sitzungen aus deinen Anwendungen heraus zu starten und Anfragen per publicId Benutzern zuzuordnen.",
       "viewLink": "API-Dokumentation anzeigen →"
     },
     "loading": "Lädt...",

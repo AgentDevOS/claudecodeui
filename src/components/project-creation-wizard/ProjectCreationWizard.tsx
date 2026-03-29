@@ -86,7 +86,7 @@ export default function ProjectCreationWizard({
       if (!formState.workspacePath.trim()) {
         setError(
           t('projectWizard.errors.provideWorkspaceName', {
-            defaultValue: 'Please provide a workspace name',
+            defaultValue: 'Please provide a project name',
           }),
         );
         return;
