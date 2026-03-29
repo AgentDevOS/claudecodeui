@@ -83,8 +83,12 @@ export default function ProjectCreationWizard({
     }
 
     if (step === 2) {
-      if (formState.workspaceType === 'existing' && !formState.workspacePath.trim()) {
-        setError(t('projectWizard.errors.providePath'));
+      if (!formState.workspacePath.trim()) {
+        setError(
+          t('projectWizard.errors.provideWorkspaceName', {
+            defaultValue: 'Please provide a workspace name',
+          }),
+        );
         return;
       }
       setStep(3);
@@ -127,7 +131,7 @@ export default function ProjectCreationWizard({
 
       const project = await createWorkspaceRequest({
         workspaceType: formState.workspaceType,
-        ...(trimmedWorkspacePath ? { path: trimmedWorkspacePath } : {}),
+        name: trimmedWorkspacePath,
       });
 
       onProjectCreated?.(project);
@@ -202,7 +206,6 @@ export default function ProjectCreationWizard({
               onNewGithubTokenChange={(newGithubToken) =>
                 updateField('newGithubToken', newGithubToken)
               }
-              onAdvanceToConfirm={() => setStep(3)}
             />
           )}
 

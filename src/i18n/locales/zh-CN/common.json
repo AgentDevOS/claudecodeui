@@ -140,19 +140,20 @@
       "confirm": "确认"
     },
     "step1": {
-      "question": "您已经有工作区，还是想创建一个新的工作区？",
+      "question": "要创建空白工作区，还是从 GitHub 仓库开始？",
       "existing": {
-        "title": "现有工作区",
-        "description": "我的服务器上已经有工作区，只需要将其添加到项目列表中"
+        "title": "空白工作区",
+        "description": "创建一个空白工作区，稍后再添加代码"
       },
       "new": {
-        "title": "新建工作区",
-        "description": "创建一个新工作区，可选择从 GitHub 仓库克隆"
+        "title": "从仓库创建",
+        "description": "创建工作区，并可选择从 GitHub 仓库克隆代码"
       }
     },
     "step2": {
-      "existingPath": "工作区路径",
-      "newPath": "工作区路径",
+      "workspaceName": "工作区名称",
+      "workspaceNamePlaceholder": "frontend-team",
+      "workspaceNameHelp": "仅作为工作区显示名使用，实际存储路径会自动分配。",
       "existingPlaceholder": "/path/to/existing/workspace",
       "newPlaceholder": "/path/to/new/workspace",
       "existingHelp": "您现有工作区目录的完整路径",
@@ -178,9 +179,12 @@
     "step3": {
       "reviewConfig": "查看您的配置",
       "workspaceType": "工作区类型：",
-      "existingWorkspace": "现有工作区",
-      "newWorkspace": "新建工作区",
+      "existingWorkspace": "空白工作区",
+      "newWorkspace": "从仓库创建",
+      "workspaceName": "工作区名称：",
       "path": "路径：",
+      "storagePath": "存储位置：",
+      "autoManagedLocation": "系统会在隔离工作区目录中自动分配",
       "cloneFrom": "克隆自：",
       "authentication": "身份验证：",
       "usingStoredToken": "使用已保存的令牌：",
@@ -201,8 +205,8 @@
       "cloning": "正在克隆..."
     },
     "errors": {
-      "selectType": "请选择您已有现有工作区还是想创建新工作区",
-      "providePath": "请提供工作区路径",
+      "selectType": "请选择要创建空白工作区，还是从仓库开始",
+      "provideWorkspaceName": "请提供工作区名称",
       "failedToCreate": "创建工作区失败",
       "failedToCreateFolder": "创建文件夹失败"
     }

@@ -3,7 +3,6 @@ import { Input } from '../../../shared/view/ui';
 import { shouldShowGithubAuthentication } from '../utils/pathUtils';
 import type { GithubTokenCredential, TokenMode, WorkspaceType } from '../types';
 import GithubAuthenticationCard from './GithubAuthenticationCard';
-import WorkspacePathField from './WorkspacePathField';
 
 type StepConfigurationProps = {
   workspaceType: WorkspaceType;
@@ -21,7 +20,6 @@ type StepConfigurationProps = {
   onTokenModeChange: (tokenMode: TokenMode) => void;
   onSelectedGithubTokenChange: (tokenId: string) => void;
   onNewGithubTokenChange: (tokenValue: string) => void;
-  onAdvanceToConfirm: () => void;
 };
 
 export default function StepConfiguration({
@@ -40,7 +38,6 @@ export default function StepConfiguration({
   onTokenModeChange,
   onSelectedGithubTokenChange,
   onNewGithubTokenChange,
-  onAdvanceToConfirm,
 }: StepConfigurationProps) {
   const { t } = useTranslation();
   const showGithubAuth = shouldShowGithubAuthentication(workspaceType, githubUrl);
@@ -49,23 +46,24 @@ export default function StepConfiguration({
     <div className="space-y-4">
       <div>
         <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-          {workspaceType === 'existing'
-            ? t('projectWizard.step2.existingPath')
-            : t('projectWizard.step2.newPath')}
+          {t('projectWizard.step2.workspaceName', { defaultValue: 'Workspace Name' })}
         </label>
 
-        <WorkspacePathField
-          workspaceType={workspaceType}
+        <Input
+          type="text"
           value={workspacePath}
+          onChange={(event) => onWorkspacePathChange(event.target.value)}
+          placeholder={t('projectWizard.step2.workspaceNamePlaceholder', {
+            defaultValue: 'frontend-team',
+          })}
+          className="w-full"
           disabled={isCreating}
-          onChange={onWorkspacePathChange}
-          onAdvanceToConfirm={onAdvanceToConfirm}
         />
 
         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-          {workspaceType === 'existing'
-            ? t('projectWizard.step2.existingHelp')
-            : t('projectWizard.step2.newHelp')}
+          {t('projectWizard.step2.workspaceNameHelp', {
+            defaultValue: 'Used as the workspace display name. The storage path is allocated automatically.',
+          })}
         </p>
       </div>
 

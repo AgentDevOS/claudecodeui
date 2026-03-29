@@ -2,37 +2,20 @@ import { useTranslation } from 'react-i18next';
 import type {
   ChangeEvent,
   ClipboardEvent,
-  Dispatch,
   FormEvent,
   KeyboardEvent,
   MouseEvent,
   ReactNode,
   RefObject,
-  SetStateAction,
   TouchEvent,
 } from 'react';
 import MicButton from '../../../mic-button/view/MicButton';
-import type { PendingPermissionRequest, PermissionMode, Provider } from '../../types/types';
-import CommandMenu from './CommandMenu';
+import type { PendingPermissionRequest } from '../../types/types';
+import type { SessionProvider } from '../../../../types/app';
 import ClaudeStatus from './ClaudeStatus';
 import ImageAttachment from './ImageAttachment';
 import PermissionRequestsBanner from './PermissionRequestsBanner';
 import ChatInputControls from './ChatInputControls';
-
-interface MentionableFile {
-  name: string;
-  path: string;
-}
-
-interface SlashCommand {
-  name: string;
-  description?: string;
-  namespace?: string;
-  path?: string;
-  type?: string;
-  metadata?: Record<string, unknown>;
-  [key: string]: unknown;
-}
 
 interface ChatComposerProps {
   pendingPermissionRequests: PendingPermissionRequest[];
@@ -44,14 +27,8 @@ interface ChatComposerProps {
   claudeStatus: { text: string; tokens: number; can_interrupt: boolean } | null;
   isLoading: boolean;
   onAbortSession: () => void;
-  provider: Provider | string;
-  permissionMode: PermissionMode | string;
-  onModeSwitch: () => void;
-  thinkingMode: string;
-  setThinkingMode: Dispatch<SetStateAction<string>>;
+  provider: SessionProvider;
   tokenBudget: { used?: number; total?: number } | null;
-  slashCommandsCount: number;
-  onToggleCommandMenu: () => void;
   hasInput: boolean;
   onClearInput: () => void;
   isUserScrolledUp: boolean;
@@ -63,16 +40,6 @@ interface ChatComposerProps {
   onRemoveImage: (index: number) => void;
   uploadingImages: Map<string, number>;
   imageErrors: Map<string, string>;
-  showFileDropdown: boolean;
-  filteredFiles: MentionableFile[];
-  selectedFileIndex: number;
-  onSelectFile: (file: MentionableFile) => void;
-  filteredCommands: SlashCommand[];
-  selectedCommandIndex: number;
-  onCommandSelect: (command: SlashCommand, index: number, isHover: boolean) => void;
-  onCloseCommandMenu: () => void;
-  isCommandMenuOpen: boolean;
-  frequentCommands: SlashCommand[];
   getRootProps: (...args: unknown[]) => Record<string, unknown>;
   getInputProps: (...args: unknown[]) => Record<string, unknown>;
   openImagePicker: () => void;
@@ -90,7 +57,6 @@ interface ChatComposerProps {
   isInputFocused?: boolean;
   placeholder: string;
   isTextareaExpanded: boolean;
-  sendByCtrlEnter?: boolean;
   onTranscript: (text: string) => void;
 }
 
@@ -102,13 +68,7 @@ export default function ChatComposer({
   isLoading,
   onAbortSession,
   provider,
-  permissionMode,
-  onModeSwitch,
-  thinkingMode,
-  setThinkingMode,
   tokenBudget,
-  slashCommandsCount,
-  onToggleCommandMenu,
   hasInput,
   onClearInput,
   isUserScrolledUp,
@@ -120,16 +80,6 @@ export default function ChatComposer({
   onRemoveImage,
   uploadingImages,
   imageErrors,
-  showFileDropdown,
-  filteredFiles,
-  selectedFileIndex,
-  onSelectFile,
-  filteredCommands,
-  selectedCommandIndex,
-  onCommandSelect,
-  onCloseCommandMenu,
-  isCommandMenuOpen,
-  frequentCommands,
   getRootProps,
   getInputProps,
   openImagePicker,
@@ -147,16 +97,9 @@ export default function ChatComposer({
   isInputFocused,
   placeholder,
   isTextareaExpanded,
-  sendByCtrlEnter,
   onTranscript,
 }: ChatComposerProps) {
   const { t } = useTranslation('chat');
-  const textareaRect = textareaRef.current?.getBoundingClientRect();
-  const commandMenuPosition = {
-    top: textareaRect ? Math.max(16, textareaRect.top - 316) : 0,
-    left: textareaRect ? textareaRect.left : 16,
-    bottom: textareaRect ? window.innerHeight - textareaRect.top + 8 : 90,
-  };
 
   // Detect if the AskUserQuestion interactive panel is active
   const hasQuestionPanel = pendingPermissionRequests.some(
@@ -189,14 +132,7 @@ export default function ChatComposer({
         />
 
         {!hasQuestionPanel && <ChatInputControls
-          permissionMode={permissionMode}
-          onModeSwitch={onModeSwitch}
-          provider={provider}
-          thinkingMode={thinkingMode}
-          setThinkingMode={setThinkingMode}
           tokenBudget={tokenBudget}
-          slashCommandsCount={slashCommandsCount}
-          onToggleCommandMenu={onToggleCommandMenu}
           hasInput={hasInput}
           onClearInput={onClearInput}
           isUserScrolledUp={isUserScrolledUp}
@@ -237,43 +173,6 @@ export default function ChatComposer({
             </div>
           </div>
         )}
-
-        {showFileDropdown && filteredFiles.length > 0 && (
-          <div className="absolute bottom-full left-0 right-0 z-50 mb-2 max-h-48 overflow-y-auto rounded-xl border border-border/50 bg-card/95 shadow-lg backdrop-blur-md">
-            {filteredFiles.map((file, index) => (
-              <div
-                key={file.path}
-                className={`cursor-pointer touch-manipulation border-b border-border/30 px-4 py-3 last:border-b-0 ${
-                  index === selectedFileIndex
-                    ? 'bg-primary/8 text-primary'
-                    : 'text-foreground hover:bg-accent/50'
-                }`}
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                }}
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  onSelectFile(file);
-                }}
-              >
-                <div className="text-sm font-medium">{file.name}</div>
-                <div className="font-mono text-xs text-muted-foreground">{file.path}</div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <CommandMenu
-          commands={filteredCommands}
-          selectedIndex={selectedCommandIndex}
-          onSelect={onCommandSelect}
-          onClose={onCloseCommandMenu}
-          position={commandMenuPosition}
-          isOpen={isCommandMenuOpen}
-          frequentCommands={frequentCommands}
-        />
 
         <div
           {...getRootProps()}
@@ -342,14 +241,6 @@ export default function ChatComposer({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
               </svg>
             </button>
-
-            <div
-              className={`pointer-events-none absolute bottom-1 left-12 right-14 hidden text-xs text-muted-foreground/50 transition-opacity duration-200 sm:right-40 sm:block ${
-                input.trim() ? 'opacity-0' : 'opacity-100'
-              }`}
-            >
-              {sendByCtrlEnter ? t('input.hintText.ctrlEnter') : t('input.hintText.enter')}
-            </div>
           </div>
         </div>
       </form>}

@@ -35,7 +35,6 @@ interface UseChatComposerStateArgs {
   currentSessionId: string | null;
   provider: SessionProvider;
   permissionMode: PermissionMode | string;
-  cyclePermissionMode: () => void;
   cursorModel: string;
   claudeModel: string;
   codexModel: string;
@@ -60,11 +59,6 @@ interface UseChatComposerStateArgs {
   setClaudeStatus: (status: { text: string; tokens: number; can_interrupt: boolean } | null) => void;
   setIsUserScrolledUp: (isScrolledUp: boolean) => void;
   setPendingPermissionRequests: Dispatch<SetStateAction<PendingPermissionRequest[]>>;
-}
-
-interface MentionableFile {
-  name: string;
-  path: string;
 }
 
 interface CommandExecutionResult {
@@ -107,7 +101,6 @@ export function useChatComposerState({
   currentSessionId,
   provider,
   permissionMode,
-  cyclePermissionMode,
   cursorModel,
   claudeModel,
   codexModel,
@@ -344,18 +337,7 @@ export function useChatComposerState({
   );
 
   const {
-    slashCommands,
-    slashCommandsCount,
-    filteredCommands,
-    frequentCommands,
-    commandQuery,
-    showCommandMenu,
-    selectedCommandIndex,
     resetCommandMenuState,
-    handleCommandSelect,
-    handleToggleCommandMenu,
-    handleCommandInputChange,
-    handleCommandMenuKeyDown,
   } = useSlashCommands({
     selectedProject,
     input,
@@ -365,13 +347,8 @@ export function useChatComposerState({
   });
 
   const {
-    showFileDropdown,
-    filteredFiles,
-    selectedFileIndex,
     renderInputWithMentions,
-    selectFile,
     setCursorPosition,
-    handleFileMentionsKeyDown,
   } = useFileMentions({
     selectedProject,
     input,
@@ -465,28 +442,6 @@ export function useChatComposerState({
       const currentInput = inputValueRef.current;
       if (!currentInput.trim() || isLoading || !selectedProject) {
         return;
-      }
-
-      // Intercept slash commands: if input starts with /commandName, execute as command with args
-      const trimmedInput = currentInput.trim();
-      if (trimmedInput.startsWith('/')) {
-        const firstSpace = trimmedInput.indexOf(' ');
-        const commandName = firstSpace > 0 ? trimmedInput.slice(0, firstSpace) : trimmedInput;
-        const matchedCommand = slashCommands.find((cmd: SlashCommand) => cmd.name === commandName);
-        if (matchedCommand) {
-          executeCommand(matchedCommand, trimmedInput);
-          setInput('');
-          inputValueRef.current = '';
-          setAttachedImages([]);
-          setUploadingImages(new Map());
-          setImageErrors(new Map());
-          resetCommandMenuState();
-          setIsTextareaExpanded(false);
-          if (textareaRef.current) {
-            textareaRef.current.style.height = 'auto';
-          }
-          return;
-        }
       }
 
       let messageContent = currentInput;
@@ -678,7 +633,6 @@ export function useChatComposerState({
       codexModel,
       currentSessionId,
       cursorModel,
-      executeCommand,
       geminiModel,
       isLoading,
       onSessionActive,
@@ -695,7 +649,6 @@ export function useChatComposerState({
       setClaudeStatus,
       setIsLoading,
       setIsUserScrolledUp,
-      slashCommands,
       thinkingMode,
     ],
   );
@@ -718,7 +671,7 @@ export function useChatComposerState({
       inputValueRef.current = next;
       return next;
     });
-  }, [selectedProject?.name]);
+  }, [selectedProject]);
 
   useEffect(() => {
     if (!selectedProject) {
@@ -767,27 +720,13 @@ export function useChatComposerState({
         return;
       }
 
-      handleCommandInputChange(newValue, cursorPos);
+      resetCommandMenuState();
     },
-    [handleCommandInputChange, resetCommandMenuState, setCursorPosition],
+    [resetCommandMenuState, setCursorPosition],
   );
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLTextAreaElement>) => {
-      if (handleCommandMenuKeyDown(event)) {
-        return;
-      }
-
-      if (handleFileMentionsKeyDown(event)) {
-        return;
-      }
-
-      if (event.key === 'Tab' && !showFileDropdown && !showCommandMenu) {
-        event.preventDefault();
-        cyclePermissionMode();
-        return;
-      }
-
       if (event.key === 'Enter') {
         if (event.nativeEvent.isComposing) {
           return;
@@ -802,15 +741,7 @@ export function useChatComposerState({
         }
       }
     },
-    [
-      cyclePermissionMode,
-      handleCommandMenuKeyDown,
-      handleFileMentionsKeyDown,
-      handleSubmit,
-      sendByCtrlEnter,
-      showCommandMenu,
-      showFileDropdown,
-    ],
+    [handleSubmit, sendByCtrlEnter],
   );
 
   const handleTextareaClick = useCallback(
@@ -963,20 +894,7 @@ export function useChatComposerState({
     isTextareaExpanded,
     thinkingMode,
     setThinkingMode,
-    slashCommandsCount,
-    filteredCommands,
-    frequentCommands,
-    commandQuery,
-    showCommandMenu,
-    selectedCommandIndex,
-    resetCommandMenuState,
-    handleCommandSelect,
-    handleToggleCommandMenu,
-    showFileDropdown,
-    filteredFiles: filteredFiles as MentionableFile[],
-    selectedFileIndex,
     renderInputWithMentions,
-    selectFile,
     attachedImages,
     setAttachedImages,
     uploadingImages,

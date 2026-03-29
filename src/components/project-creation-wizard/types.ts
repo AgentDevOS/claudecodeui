@@ -38,6 +38,7 @@ export type CreateFolderResponse = {
 export type CreateWorkspacePayload = {
   workspaceType: WorkspaceType;
   path?: string;
+  name?: string;
 };
 
 export type CreateWorkspaceResponse = {

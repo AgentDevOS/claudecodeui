@@ -137,12 +137,17 @@ export function useSlashCommands({
     }
   }, [showCommandMenu]);
 
+  const visibleCommands = useMemo(
+    () => slashCommands.filter((command) => command.type !== 'built-in'),
+    [slashCommands],
+  );
+
   const fuse = useMemo(() => {
-    if (!slashCommands.length) {
+    if (!visibleCommands.length) {
       return null;
     }
 
-    return new Fuse(slashCommands, {
+    return new Fuse(visibleCommands, {
       keys: [
         { name: 'name', weight: 2 },
         { name: 'description', weight: 1 },
@@ -151,11 +156,11 @@ export function useSlashCommands({
       includeScore: true,
       minMatchCharLength: 1,
     });
-  }, [slashCommands]);
+  }, [visibleCommands]);
 
   useEffect(() => {
     if (!commandQuery) {
-      setFilteredCommands(slashCommands);
+      setFilteredCommands(visibleCommands);
       return;
     }
 
@@ -166,16 +171,16 @@ export function useSlashCommands({
 
     const results = fuse.search(commandQuery);
     setFilteredCommands(results.map((result) => result.item));
-  }, [commandQuery, slashCommands, fuse]);
+  }, [commandQuery, visibleCommands, fuse]);
 
   const frequentCommands = useMemo(() => {
-    if (!selectedProject || slashCommands.length === 0) {
+    if (!selectedProject || visibleCommands.length === 0) {
       return [];
     }
 
     const parsedHistory = readCommandHistory(selectedProject.name);
 
-    return slashCommands
+    return visibleCommands
       .map((command) => ({
         ...command,
         usageCount: parsedHistory[command.name] || 0,
@@ -183,7 +188,7 @@ export function useSlashCommands({
       .filter((command) => command.usageCount > 0)
       .sort((commandA, commandB) => commandB.usageCount - commandA.usageCount)
       .slice(0, 5);
-  }, [selectedProject, slashCommands]);
+  }, [selectedProject, visibleCommands]);
 
   const trackCommandUsage = useCallback(
     (command: SlashCommand) => {
@@ -254,11 +259,11 @@ export function useSlashCommands({
     setSelectedCommandIndex(-1);
 
     if (isOpening) {
-      setFilteredCommands(slashCommands);
+      setFilteredCommands(visibleCommands);
     }
 
     textareaRef.current?.focus();
-  }, [showCommandMenu, slashCommands, textareaRef]);
+  }, [showCommandMenu, textareaRef, visibleCommands]);
 
   const handleCommandInputChange = useCallback(
     (newValue: string, cursorPos: number) => {
@@ -360,7 +365,7 @@ export function useSlashCommands({
 
   return {
     slashCommands,
-    slashCommandsCount: slashCommands.length,
+    slashCommandsCount: visibleCommands.length,
     filteredCommands,
     frequentCommands,
     commandQuery,

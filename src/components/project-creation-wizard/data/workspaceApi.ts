@@ -88,7 +88,7 @@ const buildCloneProgressQuery = ({
   });
 
   if (workspacePath.trim()) {
-    query.set('path', workspacePath.trim());
+    query.set('name', workspacePath.trim());
   }
 
   if (tokenMode === 'stored' && selectedGithubToken) {

@@ -140,19 +140,20 @@
       "confirm": "Confirm"
     },
     "step1": {
-      "question": "Do you already have a workspace, or would you like to create a new one?",
+      "question": "Do you want a blank workspace, or start from a GitHub repository?",
       "existing": {
-        "title": "Existing Workspace",
-        "description": "I already have a workspace on my server and just need to add it to the project list"
+        "title": "Blank Workspace",
+        "description": "Create an empty workspace and add code later"
       },
       "new": {
-        "title": "New Workspace",
-        "description": "Create a new workspace, optionally clone from a GitHub repository"
+        "title": "From Repository",
+        "description": "Create a workspace and optionally clone code from GitHub"
       }
     },
     "step2": {
-      "existingPath": "Workspace Path",
-      "newPath": "Workspace Path",
+      "workspaceName": "Workspace Name",
+      "workspaceNamePlaceholder": "frontend-team",
+      "workspaceNameHelp": "Used as the workspace display name. The storage path is allocated automatically.",
       "existingPlaceholder": "/path/to/existing/workspace",
       "newPlaceholder": "/path/to/new/workspace",
       "existingHelp": "Full path to your existing workspace directory",
@@ -178,9 +179,12 @@
     "step3": {
       "reviewConfig": "Review Your Configuration",
       "workspaceType": "Workspace Type:",
-      "existingWorkspace": "Existing Workspace",
-      "newWorkspace": "New Workspace",
+      "existingWorkspace": "Blank Workspace",
+      "newWorkspace": "From Repository",
+      "workspaceName": "Workspace Name:",
       "path": "Path:",
+      "storagePath": "Storage:",
+      "autoManagedLocation": "Auto-managed inside your isolated workspace root",
       "cloneFrom": "Clone From:",
       "authentication": "Authentication:",
       "usingStoredToken": "Using stored token:",
@@ -201,8 +205,8 @@
       "cloning": "Cloning..."
     },
     "errors": {
-      "selectType": "Please select whether you have an existing workspace or want to create a new one",
-      "providePath": "Please provide a workspace path",
+      "selectType": "Please choose whether to create a blank workspace or start from a repository",
+      "provideWorkspaceName": "Please provide a workspace name",
       "failedToCreate": "Failed to create workspace",
       "failedToCreateFolder": "Failed to create folder"
     }

@@ -264,8 +264,9 @@ export async function validateWorkspacePath(requestedPath, userId = null) {
  */
 router.post('/create-workspace', async (req, res) => {
   try {
-    const { workspaceType, path: workspacePath, githubUrl, githubTokenId, newGithubToken } = req.body;
+    const { workspaceType, path: workspacePath, name: workspaceName, githubUrl, githubTokenId, newGithubToken } = req.body;
     const requestedWorkspacePath = typeof workspacePath === 'string' ? workspacePath.trim() : '';
+    const requestedWorkspaceName = typeof workspaceName === 'string' ? workspaceName.trim() : '';
 
     // Validate required fields
     if (!workspaceType) {
@@ -276,49 +277,31 @@ router.post('/create-workspace', async (req, res) => {
       return res.status(400).json({ error: 'workspaceType must be "existing" or "new"' });
     }
 
-    // Handle existing workspace
     if (workspaceType === 'existing') {
-      if (!requestedWorkspacePath) {
-        return res.status(400).json({ error: 'path is required for existing workspaces' });
+      if (!requestedWorkspaceName) {
+        return res.status(400).json({ error: 'name is required for workspace creation' });
       }
 
-      const validation = await validateWorkspacePath(requestedWorkspacePath, req.user.id);
-      if (!validation.valid) {
-        return res.status(400).json({
-          error: 'Invalid workspace path',
-          details: validation.error
-        });
-      }
-
-      const absolutePath = validation.resolvedPath;
-
-      // Check if the path exists
-      try {
-        await fs.access(absolutePath);
-        const stats = await fs.stat(absolutePath);
-
-        if (!stats.isDirectory()) {
-          return res.status(400).json({ error: 'Path exists but is not a directory' });
-        }
-      } catch (error) {
-        if (error.code === 'ENOENT') {
-          return res.status(404).json({ error: 'Workspace path does not exist' });
-        }
-        throw error;
-      }
-
-      // Add the existing workspace to the project list
-      const project = await addProjectManually(absolutePath, null, req.user.id);
+      const managedWorkspace = await allocateWorkspaceDirectory(req.user.id);
+      const project = await addProjectManually(
+        managedWorkspace.workspacePath,
+        requestedWorkspaceName,
+        req.user.id,
+      );
 
       return res.json({
         success: true,
         project,
-        message: 'Existing workspace added successfully'
+        message: 'Workspace created successfully'
       });
     }
 
     // Handle new workspace creation
     if (workspaceType === 'new') {
+      if (!requestedWorkspaceName) {
+        return res.status(400).json({ error: 'name is required for workspace creation' });
+      }
+
       let requestedParentPath = null;
       if (requestedWorkspacePath) {
         const validation = await validateWorkspacePath(requestedWorkspacePath, req.user.id);
@@ -386,7 +369,7 @@ router.post('/create-workspace', async (req, res) => {
         }
 
         // Add the cloned repo path to the project list
-        const project = await addProjectManually(clonePath, null, req.user.id);
+        const project = await addProjectManually(clonePath, requestedWorkspaceName, req.user.id);
 
         return res.json({
           success: true,
@@ -396,7 +379,7 @@ router.post('/create-workspace', async (req, res) => {
       }
 
       // Add the new workspace to the project list (no clone)
-      const project = await addProjectManually(absolutePath, null, req.user.id);
+      const project = await addProjectManually(absolutePath, requestedWorkspaceName, req.user.id);
 
       return res.json({
         success: true,
@@ -440,8 +423,9 @@ async function getGithubTokenById(tokenId, userId) {
  * GET /api/projects/clone-progress
  */
 router.get('/clone-progress', async (req, res) => {
-  const { path: workspacePath, githubUrl, githubTokenId, newGithubToken } = req.query;
+  const { path: workspacePath, name: workspaceName, githubUrl, githubTokenId, newGithubToken } = req.query;
   const requestedWorkspacePath = typeof workspacePath === 'string' ? workspacePath.trim() : '';
+  const requestedWorkspaceName = typeof workspaceName === 'string' ? workspaceName.trim() : '';
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -455,6 +439,12 @@ router.get('/clone-progress', async (req, res) => {
   try {
     if (!githubUrl) {
       sendEvent('error', { message: 'githubUrl is required' });
+      res.end();
+      return;
+    }
+
+    if (!requestedWorkspaceName) {
+      sendEvent('error', { message: 'name is required for workspace creation' });
       res.end();
       return;
     }
@@ -548,7 +538,7 @@ router.get('/clone-progress', async (req, res) => {
     gitProcess.on('close', async (code) => {
       if (code === 0) {
         try {
-          const project = await addProjectManually(clonePath, null, req.user.id);
+          const project = await addProjectManually(clonePath, requestedWorkspaceName, req.user.id);
           sendEvent('complete', { project, message: 'Repository cloned successfully' });
         } catch (error) {
           sendEvent('error', { message: `Clone succeeded but failed to add project: ${error.message}` });
