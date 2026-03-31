@@ -1438,6 +1438,11 @@ function normalizeComparablePath(inputPath) {
   return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
 }
 
+const CODEX_JSONL_FILE_INDEX_TTL_MS = 15_000;
+let codexJsonlFileIndexCache = [];
+let codexJsonlFileIndexBuiltAt = 0;
+const codexSessionFilePathCache = new Map();
+
 async function findCodexJsonlFiles(dir) {
   const files = [];
 
@@ -1458,6 +1463,60 @@ async function findCodexJsonlFiles(dir) {
   return files;
 }
 
+function invalidateCodexSessionFileCaches(sessionId = null, filePath = null) {
+  codexJsonlFileIndexCache = [];
+  codexJsonlFileIndexBuiltAt = 0;
+
+  if (sessionId) {
+    codexSessionFilePathCache.delete(sessionId);
+  }
+
+  if (filePath) {
+    for (const [cachedSessionId, cachedFilePath] of codexSessionFilePathCache.entries()) {
+      if (cachedFilePath === filePath) {
+        codexSessionFilePathCache.delete(cachedSessionId);
+      }
+    }
+  }
+}
+
+async function getCachedCodexJsonlFiles(codexSessionsDir) {
+  const now = Date.now();
+
+  if (
+    codexJsonlFileIndexCache.length > 0 &&
+    now - codexJsonlFileIndexBuiltAt < CODEX_JSONL_FILE_INDEX_TTL_MS
+  ) {
+    return codexJsonlFileIndexCache;
+  }
+
+  codexJsonlFileIndexCache = await findCodexJsonlFiles(codexSessionsDir);
+  codexJsonlFileIndexBuiltAt = now;
+  return codexJsonlFileIndexCache;
+}
+
+async function findCachedCodexSessionFilePath(sessionId) {
+  const cachedPath = codexSessionFilePathCache.get(sessionId);
+  if (cachedPath) {
+    try {
+      await fs.access(cachedPath);
+      return cachedPath;
+    } catch {
+      codexSessionFilePathCache.delete(sessionId);
+    }
+  }
+
+  const codexSessionsDir = path.join(os.homedir(), '.codex', 'sessions');
+  const jsonlFiles = await getCachedCodexJsonlFiles(codexSessionsDir);
+  const matchedFilePath = jsonlFiles.find((filePath) => path.basename(filePath).includes(sessionId)) || null;
+
+  if (matchedFilePath) {
+    codexSessionFilePathCache.set(sessionId, matchedFilePath);
+  }
+
+  return matchedFilePath;
+}
+
 async function buildCodexSessionsIndex() {
   const codexSessionsDir = path.join(os.homedir(), '.codex', 'sessions');
   const sessionsByProject = new Map();
@@ -1468,7 +1527,7 @@ async function buildCodexSessionsIndex() {
     return sessionsByProject;
   }
 
-  const jsonlFiles = await findCodexJsonlFiles(codexSessionsDir);
+  const jsonlFiles = await getCachedCodexJsonlFiles(codexSessionsDir);
 
   for (const filePath of jsonlFiles) {
     try {
@@ -1476,6 +1535,8 @@ async function buildCodexSessionsIndex() {
       if (!sessionData || !sessionData.id) {
         continue;
       }
+
+      codexSessionFilePathCache.set(sessionData.id, filePath);
 
       const normalizedProjectPath = normalizeComparablePath(sessionData.cwd);
       if (!normalizedProjectPath) {
@@ -1627,28 +1688,7 @@ async function parseCodexSessionFile(filePath) {
 // Get messages for a specific Codex session
 async function getCodexSessionMessages(sessionId, limit = null, offset = 0) {
   try {
-    const codexSessionsDir = path.join(os.homedir(), '.codex', 'sessions');
-
-    // Find the session file by searching for the session ID
-    const findSessionFile = async (dir) => {
-      try {
-        const entries = await fs.readdir(dir, { withFileTypes: true });
-        for (const entry of entries) {
-          const fullPath = path.join(dir, entry.name);
-          if (entry.isDirectory()) {
-            const found = await findSessionFile(fullPath);
-            if (found) return found;
-          } else if (entry.name.includes(sessionId) && entry.name.endsWith('.jsonl')) {
-            return fullPath;
-          }
-        }
-      } catch (error) {
-        // Skip directories we can't read
-      }
-      return null;
-    };
-
-    const sessionFilePath = await findSessionFile(codexSessionsDir);
+    const sessionFilePath = await findCachedCodexSessionFilePath(sessionId);
 
     if (!sessionFilePath) {
       console.warn(`Codex session file not found for session ${sessionId}`);
@@ -1872,30 +1912,21 @@ async function getCodexSessionMessages(sessionId, limit = null, offset = 0) {
 
 async function deleteCodexSession(sessionId) {
   try {
+    const cachedFilePath = await findCachedCodexSessionFilePath(sessionId);
+    if (cachedFilePath) {
+      await fs.unlink(cachedFilePath);
+      invalidateCodexSessionFileCaches(sessionId, cachedFilePath);
+      return true;
+    }
+
     const codexSessionsDir = path.join(os.homedir(), '.codex', 'sessions');
-
-    const findJsonlFiles = async (dir) => {
-      const files = [];
-      try {
-        const entries = await fs.readdir(dir, { withFileTypes: true });
-        for (const entry of entries) {
-          const fullPath = path.join(dir, entry.name);
-          if (entry.isDirectory()) {
-            files.push(...await findJsonlFiles(fullPath));
-          } else if (entry.name.endsWith('.jsonl')) {
-            files.push(fullPath);
-          }
-        }
-      } catch (error) { }
-      return files;
-    };
-
-    const jsonlFiles = await findJsonlFiles(codexSessionsDir);
+    const jsonlFiles = await getCachedCodexJsonlFiles(codexSessionsDir);
 
     for (const filePath of jsonlFiles) {
       const sessionData = await parseCodexSessionFile(filePath);
       if (sessionData && sessionData.id === sessionId) {
         await fs.unlink(filePath);
+        invalidateCodexSessionFileCaches(sessionId, filePath);
         return true;
       }
     }

@@ -25,6 +25,7 @@ type DeliveryWorkflow = {
     stage: string;
     eventType: string;
     summary?: string | null;
+    payload?: Record<string, any>;
     createdAt: string;
   }>;
   feedback?: Array<{
@@ -66,6 +67,42 @@ function getStageLabel(stage: string, t: (key: string, options?: Record<string, 
 
 function getStatusLabel(status: string, t: (key: string, options?: Record<string, unknown>) => string) {
   return t(`deliveryWorkflow.statuses.${status}`, { defaultValue: STATUS_LABELS[status] || status });
+}
+
+function getEventSummary(
+  event: NonNullable<DeliveryWorkflow['events']>[number],
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
+  const currentStageLabel = getStageLabel(event.stage, t);
+  const confirmedStage = typeof event.payload?.confirmedStage === 'string' ? event.payload.confirmedStage : event.stage;
+  const confirmedStageLabel = getStageLabel(confirmedStage, t);
+  const sourceStage = typeof event.payload?.sourceStage === 'string'
+    ? event.payload.sourceStage
+    : event.eventType === 'stage_completed' && event.stage === 'uat'
+      ? 'development'
+      : event.stage;
+  const sourceStageLabel = getStageLabel(sourceStage, t);
+
+  switch (event.eventType) {
+    case 'workflow_created':
+      return t('deliveryWorkflow.events.workflowCreated');
+    case 'stage_started':
+      return t('deliveryWorkflow.events.stageStarted', { stage: currentStageLabel });
+    case 'stage_completed':
+      return t('deliveryWorkflow.events.stageCompleted', { stage: sourceStageLabel });
+    case 'stage_confirmed':
+      return t('deliveryWorkflow.events.stageConfirmed', { stage: confirmedStageLabel });
+    case 'feedback_submitted':
+      return t('deliveryWorkflow.events.feedbackSubmitted');
+    case 'revision_submitted':
+      return t('deliveryWorkflow.events.revisionSubmitted', { stage: currentStageLabel });
+    case 'workflow_completed':
+      return t('deliveryWorkflow.events.workflowCompleted');
+    case 'stage_failed':
+      return event.summary || t('deliveryWorkflow.events.stageFailed', { stage: currentStageLabel });
+    default:
+      return event.summary || event.eventType;
+  }
 }
 
 function formatTimestamp(value?: string, locale?: string) {
@@ -161,11 +198,11 @@ export default function DeliveryWorkflowPanel({ selectedProject, latestMessage }
       setSelectedWorkflowId((current) => (current === nextSelectedId ? current : nextSelectedId));
       setError(null);
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : 'Failed to load workflows');
+      setError(caughtError instanceof Error ? caughtError.message : t('deliveryWorkflow.errors.loadWorkflows'));
     } finally {
       setIsLoadingList(false);
     }
-  }, [selectedProject.name]);
+  }, [selectedProject.name, t]);
 
   const refreshSelectedWorkflow = useCallback(async (workflowId: string | null) => {
     if (!workflowId) {
@@ -180,11 +217,11 @@ export default function DeliveryWorkflowPanel({ selectedProject, latestMessage }
       setSelectedWorkflow((data.workflow || null) as DeliveryWorkflow | null);
       setError(null);
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : 'Failed to load workflow details');
+      setError(caughtError instanceof Error ? caughtError.message : t('deliveryWorkflow.errors.loadWorkflow'));
     } finally {
       setIsLoadingDetail(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     setSelectedWorkflow(null);
@@ -222,7 +259,7 @@ export default function DeliveryWorkflowPanel({ selectedProject, latestMessage }
 
   const handleCreateWorkflow = useCallback(async () => {
     if (!requirementText.trim()) {
-      setError('Requirement text is required');
+      setError(t('deliveryWorkflow.errors.requirementRequired'));
       return;
     }
 
@@ -243,11 +280,11 @@ export default function DeliveryWorkflowPanel({ selectedProject, latestMessage }
       await refreshSelectedWorkflow(workflow.id);
       setError(null);
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : 'Failed to create workflow');
+      setError(caughtError instanceof Error ? caughtError.message : t('deliveryWorkflow.errors.createWorkflow'));
     } finally {
       setIsSubmitting(false);
     }
-  }, [requirementText, refreshSelectedWorkflow, refreshWorkflows, selectedProject.name, selectedProjectPath, title]);
+  }, [requirementText, refreshSelectedWorkflow, refreshWorkflows, selectedProject.name, selectedProjectPath, t, title]);
 
   const handleConfirm = useCallback(async () => {
     if (!selectedWorkflow) {
@@ -262,11 +299,11 @@ export default function DeliveryWorkflowPanel({ selectedProject, latestMessage }
       await refreshSelectedWorkflow(selectedWorkflow.id);
       setError(null);
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : 'Failed to confirm workflow');
+      setError(caughtError instanceof Error ? caughtError.message : t('deliveryWorkflow.errors.confirmWorkflow'));
     } finally {
       setIsSubmitting(false);
     }
-  }, [refreshSelectedWorkflow, refreshWorkflows, selectedWorkflow]);
+  }, [refreshSelectedWorkflow, refreshWorkflows, selectedWorkflow, t]);
 
   const handleSubmitFeedback = useCallback(async () => {
     if (!selectedWorkflow || !feedbackText.trim()) {
@@ -282,11 +319,11 @@ export default function DeliveryWorkflowPanel({ selectedProject, latestMessage }
       await refreshSelectedWorkflow(selectedWorkflow.id);
       setError(null);
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : 'Failed to submit feedback');
+      setError(caughtError instanceof Error ? caughtError.message : t('deliveryWorkflow.errors.submitFeedback'));
     } finally {
       setIsSubmitting(false);
     }
-  }, [feedbackText, refreshSelectedWorkflow, refreshWorkflows, selectedWorkflow]);
+  }, [feedbackText, refreshSelectedWorkflow, refreshWorkflows, selectedWorkflow, t]);
 
   const handleComplete = useCallback(async () => {
     if (!selectedWorkflow) {
@@ -301,11 +338,11 @@ export default function DeliveryWorkflowPanel({ selectedProject, latestMessage }
       await refreshSelectedWorkflow(selectedWorkflow.id);
       setError(null);
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : 'Failed to complete workflow');
+      setError(caughtError instanceof Error ? caughtError.message : t('deliveryWorkflow.errors.completeWorkflow'));
     } finally {
       setIsSubmitting(false);
     }
-  }, [refreshSelectedWorkflow, refreshWorkflows, selectedWorkflow]);
+  }, [refreshSelectedWorkflow, refreshWorkflows, selectedWorkflow, t]);
 
   return (
     <div className="h-full overflow-auto bg-background px-4 py-4">
@@ -545,7 +582,7 @@ export default function DeliveryWorkflowPanel({ selectedProject, latestMessage }
                         )}
                         {(selectedWorkflow.events || []).map((event) => (
                           <div key={event.id} className="rounded-md bg-muted/50 px-3 py-2 text-sm">
-                            <div className="font-medium text-foreground">{event.summary || event.eventType}</div>
+                            <div className="font-medium text-foreground">{getEventSummary(event, t)}</div>
                             <div className="text-xs text-muted-foreground">
                               {getStageLabel(event.stage, t)} · {formatTimestamp(event.createdAt, i18n.language)}
                             </div>

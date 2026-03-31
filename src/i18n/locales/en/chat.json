@@ -136,6 +136,49 @@
     "clearInput": "Clear input",
     "scrollToBottom": "Scroll to bottom"
   },
+  "workflowSession": {
+    "defaultTitle": "Delivery Workflow",
+    "noSummary": "This stage is ready.",
+    "attempt": "Attempt {{count}}",
+    "actions": {
+      "confirm": "Confirm",
+      "markDelivered": "Mark Delivered",
+      "processing": "Processing..."
+    },
+    "helpers": {
+      "reviseCurrentStage": "Type in the chat box to request changes for this stage, or confirm to continue.",
+      "submitUatFeedback": "Type in the chat box to submit UAT issues or follow-up requests, or mark it delivered.",
+      "running": "This stage is currently running. A new session will open automatically when output is ready.",
+      "completed": "This workflow has been delivered.",
+      "inspect": "Review this stage output in chat and continue from here."
+    },
+    "progress": {
+      "creating": "Preparing the requirement summary.",
+      "revisingRequirement": "Updating the requirement summary based on your feedback.",
+      "revisingPrototype": "Updating the prototype notes based on your feedback.",
+      "submittingFeedback": "Applying your feedback and rerunning development checks."
+    },
+    "placeholders": {
+      "requirement": "Add requirement changes. Sending here will regenerate the requirement stage.",
+      "prototype": "Add prototype changes. Sending here will regenerate the prototype stage.",
+      "uat": "Describe UAT defects, adjustments, or follow-up requests."
+    },
+    "stages": {
+      "requirement": "Requirement",
+      "prototype": "Prototype",
+      "development": "Development",
+      "uat": "UAT",
+      "delivery": "Delivery"
+    },
+    "statuses": {
+      "queued": "Queued",
+      "running": "Running",
+      "waiting_confirm": "Waiting for Confirmation",
+      "waiting_feedback": "Waiting for UAT Feedback",
+      "failed": "Failed",
+      "completed": "Completed"
+    }
+  },
   "thinkingMode": {
     "selector": {
       "title": "Thinking Mode",

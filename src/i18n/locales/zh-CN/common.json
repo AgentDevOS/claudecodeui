@@ -120,6 +120,25 @@
       "uatPreview": "UAT 预览",
       "runtimeEndpoint": "运行时地址"
     },
+    "events": {
+      "workflowCreated": "已创建工作流",
+      "stageStarted": "已开始{{stage}}阶段",
+      "stageCompleted": "已完成{{stage}}阶段",
+      "stageConfirmed": "已确认{{stage}}阶段",
+      "feedbackSubmitted": "已提交 UAT 反馈",
+      "revisionSubmitted": "已提交{{stage}}阶段修改请求",
+      "workflowCompleted": "工作流已标记为已交付",
+      "stageFailed": "{{stage}}阶段失败"
+    },
+    "errors": {
+      "loadWorkflows": "加载工作流失败",
+      "loadWorkflow": "加载工作流详情失败",
+      "requirementRequired": "请输入需求内容",
+      "createWorkflow": "创建工作流失败",
+      "confirmWorkflow": "确认工作流失败",
+      "submitFeedback": "提交反馈失败",
+      "completeWorkflow": "完成工作流失败"
+    },
     "stages": {
       "requirement": "需求",
       "prototype": "原型",

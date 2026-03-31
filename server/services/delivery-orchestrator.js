@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import path from 'path';
 import { promises as fs } from 'fs';
-import { deliveryWorkflowsDb } from '../database/db.js';
+import { deliveryWorkflowsDb, sessionNamesDb } from '../database/db.js';
 import { queryCodex } from '../openai-codex.js';
 import { broadcastDeliveryWorkflowUpdate } from '../utils/delivery-websocket.js';
 import { startWorkflowRuntime, stopWorkflowRuntime, getWorkflowRuntime } from './delivery-runtime-manager.js';
@@ -18,6 +18,41 @@ function excerpt(text, maxLength = 220) {
     return normalized;
   }
   return `${normalized.slice(0, maxLength - 1)}…`;
+}
+
+function sameLanguageInstruction(reference = "the user's request") {
+  return `Write all human-readable content in the same language as ${reference}. If it is Chinese, use Simplified Chinese.`;
+}
+
+function conciseWorkflowOutputInstruction() {
+  return [
+    'Keep any chat-facing output minimal.',
+    'Do not narrate your inspection, planning, validation, or intermediate progress.',
+    'Do not emit step-by-step work logs unless an error blocks completion.',
+    "If you send a final response, keep it to 1-2 short sentences summarizing the artifact result in the same language as the user's request.",
+  ].join('\n');
+}
+
+function getStageSessionName(workflow, stage) {
+  const useChineseLabels = /[\u4e00-\u9fff]/.test(workflow.title || workflow.requirementText || '');
+  const stageLabels = useChineseLabels
+    ? {
+        requirement: '需求评审',
+        prototype: '原型设计',
+        development: '开发实现',
+        uat: 'UAT',
+        delivery: '交付',
+      }
+    : {
+        requirement: 'Requirement Review',
+        prototype: 'Prototype',
+        development: 'Development',
+        uat: 'UAT',
+        delivery: 'Delivery',
+      };
+
+  const baseTitle = workflow.title || excerpt(workflow.requirementText, 40) || 'Delivery Workflow';
+  return `${baseTitle} · ${stageLabels[stage] || stage}`;
 }
 
 function workflowRoot(projectPath, workflowId) {
@@ -122,9 +157,21 @@ class DeliveryExecutionWriter {
     }
 
     if (message.kind === 'session_created' && message.sessionId) {
-      deliveryWorkflowsDb.updateWorkflow(this.workflow.id, {
+      const currentWorkflow = deliveryWorkflowsDb.getWorkflowById(this.workflow.id, this.workflow.userId) || this.workflow;
+      const updatedWorkflow = deliveryWorkflowsDb.updateWorkflow(this.workflow.id, {
         activeSessionId: message.sessionId,
+        data: buildWorkflowDataWithSession(currentWorkflow, message.sessionId),
       }, this.workflow.userId);
+
+      sessionNamesDb.setName(
+        message.sessionId,
+        'codex',
+        getStageSessionName(this.workflow, this.workflow.stage),
+      );
+      broadcastDeliveryWorkflowUpdate(updatedWorkflow, {
+        eventType: 'session_attached',
+        activeSessionId: message.sessionId,
+      });
     }
 
     if (message.kind === 'error' && message.content) {
@@ -133,12 +180,21 @@ class DeliveryExecutionWriter {
   }
 }
 
-function buildRequirementPrompt(workflow, paths) {
+function buildRequirementPrompt(workflow, paths, feedbackItems = []) {
+  const revisionSection = feedbackItems.length > 0
+    ? `
+Revision requests to address:
+${feedbackItems.map((item, index) => `${index + 1}. ${item.content}`).join('\n')}
+`
+    : '';
+
   return `
 You are working inside the project at ${workflow.projectPath}.
 
 The user submitted this product request:
 ${workflow.requirementText}
+
+${revisionSection}
 
 Create requirement artifacts for a delivery workflow. Do not implement code yet.
 
@@ -157,18 +213,29 @@ The JSON file must be valid JSON with this schema:
 }
 
 The markdown file should be a human-readable requirement brief matching the JSON.
+${sameLanguageInstruction("the user's request")}
+${conciseWorkflowOutputInstruction()}
 Do not create prototype files.
 Do not modify the main project source code.
 `.trim();
 }
 
-function buildPrototypePrompt(workflow, paths) {
+function buildPrototypePrompt(workflow, paths, feedbackItems = []) {
+  const revisionSection = feedbackItems.length > 0
+    ? `
+Revision requests to address:
+${feedbackItems.map((item, index) => `${index + 1}. ${item.content}`).join('\n')}
+`
+    : '';
+
   return `
 You are working inside the project at ${workflow.projectPath}.
 
 Read the confirmed requirement from:
 - ${paths.requirement.md}
 - ${paths.requirement.json}
+
+${revisionSection}
 
 Create a lightweight browser prototype without modifying the main project source code.
 
@@ -178,6 +245,7 @@ Requirements:
 - Prefer simple static HTML/CSS/JS with relative asset paths
 - Write a prototype explanation to ${paths.prototype.md}
 - Write valid JSON metadata to ${paths.prototype.json}
+- ${sameLanguageInstruction('the confirmed requirement')}
 
 The JSON file must use this schema:
 {
@@ -188,6 +256,7 @@ The JSON file must use this schema:
 }
 
 Do not modify the main project source code.
+${conciseWorkflowOutputInstruction()}
 `.trim();
 }
 
@@ -221,6 +290,7 @@ If the app uses WebSockets, assume the public WS path is /runtime-ws/${workflow.
 Required outputs:
 1. Write a human-readable summary to ${paths.development.summary}
 2. Write valid JSON to ${paths.development.report}
+3. ${sameLanguageInstruction('the confirmed requirement and any UAT feedback')}
 
 The report JSON must follow this schema:
 {
@@ -248,6 +318,7 @@ The report JSON must follow this schema:
 If no static UAT preview is available, set preview to null.
 If no local runtime is needed, set runtime to null.
 Do not write placeholders. Only report commands and paths that actually exist after your work.
+${conciseWorkflowOutputInstruction()}
 `.trim();
 }
 
@@ -265,6 +336,8 @@ function buildRequirementData(workflow, paths, requirementJson, requirementMd) {
   return {
     ...(workflow.data || {}),
     requirement: {
+      attempt: workflow.stageAttempt,
+      generatedAt: new Date().toISOString(),
       jsonPath: paths.requirement.json,
       markdownPath: paths.requirement.md,
       content: requirementJson,
@@ -276,10 +349,25 @@ function buildRequirementData(workflow, paths, requirementJson, requirementMd) {
   };
 }
 
+function buildWorkflowDataWithSession(workflow, sessionId) {
+  const existingData = workflow.data || {};
+  const existingSessionIds = Array.isArray(existingData.sessionIds) ? existingData.sessionIds : [];
+  const sessionIds = existingSessionIds.includes(sessionId)
+    ? existingSessionIds
+    : [...existingSessionIds, sessionId];
+
+  return {
+    ...existingData,
+    sessionIds,
+  };
+}
+
 function buildPrototypeData(workflow, paths, prototypeJson, prototypeMd) {
   return {
     ...(workflow.data || {}),
     prototype: {
+      attempt: workflow.stageAttempt,
+      generatedAt: new Date().toISOString(),
       jsonPath: paths.prototype.json,
       markdownPath: paths.prototype.md,
       appDir: paths.prototype.appDir,
@@ -298,6 +386,8 @@ function buildDevelopmentData(workflow, paths, summaryMarkdown, reportJson, prev
   return {
     ...(workflow.data || {}),
     development: {
+      attempt: workflow.stageAttempt,
+      generatedAt: new Date().toISOString(),
       summaryPath: paths.development.summary,
       reportPath: paths.development.report,
       summaryMarkdown,
@@ -322,13 +412,15 @@ function buildDevelopmentData(workflow, paths, summaryMarkdown, reportJson, prev
 async function runRequirementStage(workflow) {
   const paths = getWorkflowPaths(workflow);
   await ensureWorkflowDirectories(paths);
+  const feedbackItems = deliveryWorkflowsDb.getFeedback(workflow.id, 'requirement');
 
   const writer = new DeliveryExecutionWriter(workflow);
-  await queryCodex(buildRequirementPrompt(workflow, paths), {
+  await queryCodex(buildRequirementPrompt(workflow, paths, feedbackItems), {
     projectPath: workflow.projectPath,
     cwd: workflow.projectPath,
     sessionId: null,
     permissionMode: 'bypassPermissions',
+    sessionSummary: getStageSessionName(workflow, 'requirement'),
   }, writer);
 
   if (!(await exists(paths.requirement.json)) || !(await exists(paths.requirement.md))) {
@@ -351,13 +443,15 @@ async function runRequirementStage(workflow) {
 async function runPrototypeStage(workflow) {
   const paths = getWorkflowPaths(workflow);
   await ensureWorkflowDirectories(paths);
+  const feedbackItems = deliveryWorkflowsDb.getFeedback(workflow.id, 'prototype');
 
   const writer = new DeliveryExecutionWriter(workflow);
-  await queryCodex(buildPrototypePrompt(workflow, paths), {
+  await queryCodex(buildPrototypePrompt(workflow, paths, feedbackItems), {
     projectPath: workflow.projectPath,
     cwd: workflow.projectPath,
     sessionId: null,
     permissionMode: 'bypassPermissions',
+    sessionSummary: getStageSessionName(workflow, 'prototype'),
   }, writer);
 
   if (!(await exists(paths.prototype.json)) || !(await exists(paths.prototype.md))) {
@@ -381,13 +475,14 @@ async function runDevelopmentStage(workflow) {
   const paths = getWorkflowPaths(workflow);
   await ensureWorkflowDirectories(paths);
 
-  const feedbackItems = deliveryWorkflowsDb.getFeedback(workflow.id);
+  const feedbackItems = deliveryWorkflowsDb.getFeedback(workflow.id, 'uat');
   const writer = new DeliveryExecutionWriter(workflow);
   await queryCodex(buildDevelopmentPrompt(workflow, paths, feedbackItems), {
     projectPath: workflow.projectPath,
     cwd: workflow.projectPath,
     sessionId: null,
     permissionMode: 'bypassPermissions',
+    sessionSummary: getStageSessionName(workflow, 'development'),
   }, writer);
 
   if (!(await exists(paths.development.report)) || !(await exists(paths.development.summary))) {
@@ -438,6 +533,7 @@ async function executeWorkflowStage(workflowId) {
   }
 
   addWorkflowEvent(workflow, workflow.stage, 'stage_started', `Started ${workflow.stage} stage`, {
+    sourceStage: workflow.stage,
     stageAttempt: workflow.stageAttempt,
   });
   broadcastDeliveryWorkflowUpdate(workflow, { eventType: 'stage_started' });
@@ -455,6 +551,7 @@ async function executeWorkflowStage(workflowId) {
     }
 
     addWorkflowEvent(updatedWorkflow, updatedWorkflow.stage, 'stage_completed', `Completed ${workflow.stage} stage`, {
+      sourceStage: workflow.stage,
       resultingStage: updatedWorkflow.stage,
       resultingStatus: updatedWorkflow.status,
     });
@@ -467,6 +564,7 @@ async function executeWorkflowStage(workflowId) {
     }, workflow.userId);
 
     addWorkflowEvent(failedWorkflow, workflow.stage, 'stage_failed', error.message, {
+      sourceStage: workflow.stage,
       stageAttempt: workflow.stageAttempt,
     });
     broadcastDeliveryWorkflowUpdate(failedWorkflow, { eventType: 'stage_failed', error: error.message });
@@ -527,6 +625,23 @@ export function getDeliveryWorkflowForUser(workflowId, userId) {
   };
 }
 
+export function getDeliveryWorkflowForSession(sessionId, userId) {
+  const workflow = deliveryWorkflowsDb.getWorkflowByActiveSessionId(userId, sessionId)
+    || deliveryWorkflowsDb.getWorkflowsByUser(userId).find((item) => (
+      Array.isArray(item.data?.sessionIds) && item.data.sessionIds.includes(sessionId)
+    ));
+  if (!workflow) {
+    return null;
+  }
+
+  return {
+    ...workflow,
+    events: deliveryWorkflowsDb.getEvents(workflow.id),
+    feedback: deliveryWorkflowsDb.getFeedback(workflow.id),
+    runtimeState: getWorkflowRuntime(workflow.id),
+  };
+}
+
 export function getDeliveryWorkflowsForProject(userId, projectName) {
   return deliveryWorkflowsDb.getWorkflowsByProject(userId, projectName).map((workflow) => ({
     ...workflow,
@@ -582,6 +697,7 @@ export async function submitDeliveryWorkflowFeedback(workflowId, userId, content
 
   deliveryWorkflowsDb.addFeedback({
     workflowId,
+    stage: 'uat',
     content,
     resolvedInAttempt: workflow.stageAttempt + 1,
   });
@@ -597,6 +713,39 @@ export async function submitDeliveryWorkflowFeedback(workflowId, userId, content
     content,
   });
   broadcastDeliveryWorkflowUpdate(updated, { eventType: 'feedback_submitted' });
+  void queueWorkflowStage(workflowId);
+
+  return updated;
+}
+
+export async function reviseDeliveryWorkflow(workflowId, userId, content) {
+  const workflow = deliveryWorkflowsDb.getWorkflowById(workflowId, userId);
+  if (!workflow) {
+    return null;
+  }
+
+  if (!(workflow.status === 'waiting_confirm' && (workflow.stage === 'requirement' || workflow.stage === 'prototype'))) {
+    throw new Error('Workflow is not ready for revision feedback');
+  }
+
+  deliveryWorkflowsDb.addFeedback({
+    workflowId,
+    stage: workflow.stage,
+    content,
+    resolvedInAttempt: workflow.stageAttempt + 1,
+  });
+
+  const updated = deliveryWorkflowsDb.updateWorkflow(workflowId, {
+    status: 'running',
+    stageAttempt: workflow.stageAttempt + 1,
+    errorMessage: null,
+  }, userId);
+
+  addWorkflowEvent(updated, workflow.stage, 'revision_submitted', `Submitted ${workflow.stage} revision request`, {
+    content,
+    stage: workflow.stage,
+  });
+  broadcastDeliveryWorkflowUpdate(updated, { eventType: 'revision_submitted' });
   void queueWorkflowStage(workflowId);
 
   return updated;

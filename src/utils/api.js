@@ -206,10 +206,19 @@ export const api = {
     get: (workflowId) =>
       authenticatedFetch(`/api/delivery/${encodeURIComponent(workflowId)}`),
 
+    getBySession: (sessionId) =>
+      authenticatedFetch(`/api/delivery/session/${encodeURIComponent(sessionId)}`),
+
     confirm: (workflowId) =>
       authenticatedFetch(`/api/delivery/${encodeURIComponent(workflowId)}/confirm`, {
         method: 'POST',
         body: JSON.stringify({}),
+      }),
+
+    revise: (workflowId, content) =>
+      authenticatedFetch(`/api/delivery/${encodeURIComponent(workflowId)}/revise`, {
+        method: 'POST',
+        body: JSON.stringify({ content }),
       }),
 
     submitFeedback: (workflowId, content) =>

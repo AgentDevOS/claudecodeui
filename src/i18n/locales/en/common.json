@@ -120,6 +120,25 @@
       "uatPreview": "UAT Preview",
       "runtimeEndpoint": "Runtime Endpoint"
     },
+    "events": {
+      "workflowCreated": "Workflow created",
+      "stageStarted": "Started {{stage}} stage",
+      "stageCompleted": "Completed {{stage}} stage",
+      "stageConfirmed": "Confirmed {{stage}} stage",
+      "feedbackSubmitted": "Submitted UAT feedback",
+      "revisionSubmitted": "Submitted {{stage}} revision request",
+      "workflowCompleted": "Workflow marked as delivered",
+      "stageFailed": "{{stage}} stage failed"
+    },
+    "errors": {
+      "loadWorkflows": "Failed to load workflows",
+      "loadWorkflow": "Failed to load workflow details",
+      "requirementRequired": "Requirement text is required",
+      "createWorkflow": "Failed to create workflow",
+      "confirmWorkflow": "Failed to confirm workflow",
+      "submitFeedback": "Failed to submit feedback",
+      "completeWorkflow": "Failed to complete workflow"
+    },
     "stages": {
       "requirement": "Requirement",
       "prototype": "Prototype",

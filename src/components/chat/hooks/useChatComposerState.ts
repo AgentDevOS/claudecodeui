@@ -10,18 +10,19 @@ import type {
   TouchEvent,
 } from 'react';
 import { useDropzone } from 'react-dropzone';
+import { useTranslation } from 'react-i18next';
 import { authenticatedFetch } from '../../../utils/api';
 import { grantClaudeToolPermission } from '../utils/chatPermissions';
 import { safeLocalStorage } from '../utils/chatStorage';
 import type {
   ChatMessage,
   PendingPermissionRequest,
-  PermissionMode,
 } from '../types/types';
 import type { Project, ProjectSession, SessionProvider } from '../../../types/app';
 import { escapeRegExp } from '../utils/chatFormatting';
 import { useFileMentions } from './useFileMentions';
 import { type SlashCommand, useSlashCommands } from './useSlashCommands';
+import type { SessionWorkflow } from './useWorkflowSessionState';
 
 type PendingViewSession = {
   sessionId: string | null;
@@ -31,9 +32,9 @@ type PendingViewSession = {
 interface UseChatComposerStateArgs {
   selectedProject: Project | null;
   selectedSession: ProjectSession | null;
+  sessionWorkflow?: SessionWorkflow | null;
   currentSessionId: string | null;
   provider: SessionProvider;
-  permissionMode: PermissionMode | string;
   cursorModel: string;
   claudeModel: string;
   codexModel: string;
@@ -43,12 +44,11 @@ interface UseChatComposerStateArgs {
   tokenBudget: Record<string, unknown> | null;
   sendMessage: (message: unknown) => void;
   sendByCtrlEnter?: boolean;
-  onSessionActive?: (sessionId?: string | null) => void;
-  onSessionProcessing?: (sessionId?: string | null) => void;
   onInputFocusChange?: (focused: boolean) => void;
   onFileOpen?: (filePath: string, diffInfo?: unknown) => void;
   onShowSettings?: () => void;
-  onOpenDeliveryTab?: () => void;
+  onTrackWorkflow?: (workflowId: string | null) => void;
+  onSetWorkflowTrackingPending?: (pending: boolean) => void;
   pendingViewSessionRef: { current: PendingViewSession | null };
   scrollToBottom: () => void;
   addMessage: (msg: ChatMessage) => void;
@@ -98,9 +98,9 @@ const getNotificationSessionSummary = (
 export function useChatComposerState({
   selectedProject,
   selectedSession,
+  sessionWorkflow,
   currentSessionId,
   provider,
-  permissionMode,
   cursorModel,
   claudeModel,
   codexModel,
@@ -110,12 +110,11 @@ export function useChatComposerState({
   tokenBudget,
   sendMessage,
   sendByCtrlEnter,
-  onSessionActive,
-  onSessionProcessing,
   onInputFocusChange,
   onFileOpen,
   onShowSettings,
-  onOpenDeliveryTab,
+  onTrackWorkflow,
+  onSetWorkflowTrackingPending,
   pendingViewSessionRef,
   scrollToBottom,
   addMessage,
@@ -127,6 +126,7 @@ export function useChatComposerState({
   setIsUserScrolledUp,
   setPendingPermissionRequests,
 }: UseChatComposerStateArgs) {
+  const { t } = useTranslation('chat');
   const [input, setInput] = useState(() => {
     if (typeof window !== 'undefined' && selectedProject) {
       return safeLocalStorage.getItem(`draft_input_${selectedProject.name}`) || '';
@@ -455,6 +455,31 @@ export function useChatComposerState({
       }
 
       const messageContent = currentInput;
+      const activeWorkflow =
+        sessionWorkflow && selectedSession?.id && sessionWorkflow.activeSessionId === selectedSession.id
+          ? sessionWorkflow
+          : null;
+      const isRevisionStage = Boolean(
+        activeWorkflow
+        && activeWorkflow.status === 'waiting_confirm'
+        && (activeWorkflow.stage === 'requirement' || activeWorkflow.stage === 'prototype'),
+      );
+      const isUatFeedbackStage = Boolean(
+        activeWorkflow
+        && activeWorkflow.stage === 'uat'
+        && activeWorkflow.status === 'waiting_feedback',
+      );
+      const activeWorkflowId = activeWorkflow?.id || null;
+      const shouldTrackWorkflow = Boolean(!isTemporarySessionId(selectedSession?.id) && (!activeWorkflow || activeWorkflowId));
+
+      if (activeWorkflow && activeWorkflow.status === 'running') {
+        addMessage({
+          type: 'assistant',
+          content: 'This workflow stage is still running. Wait for the next stage session or result card before sending more input.',
+          timestamp: new Date(),
+        });
+        return;
+      }
 
       const userMessage: ChatMessage = {
         type: 'user',
@@ -466,7 +491,11 @@ export function useChatComposerState({
       setIsLoading(true);
       setCanAbortSession(false);
       setClaudeStatus({
-        text: 'Creating delivery workflow',
+        text: isRevisionStage
+          ? `Updating ${activeWorkflow?.stage || 'workflow'} stage`
+          : isUatFeedbackStage
+            ? 'Submitting UAT feedback'
+            : 'Creating delivery workflow',
         tokens: 0,
         can_interrupt: false,
       });
@@ -487,29 +516,69 @@ export function useChatComposerState({
       }
 
       try {
-        const response = await authenticatedFetch('/api/delivery', {
-          method: 'POST',
-          body: JSON.stringify({
-            projectName: selectedProject.name,
-            projectPath: resolvedProjectPath,
-            title: getNotificationSessionSummary(selectedSession, currentInput) || undefined,
-            requirementText: messageContent,
-            provider: 'codex',
-          }),
-        });
+        if (shouldTrackWorkflow) {
+          onSetWorkflowTrackingPending?.(true);
+        }
+        if (activeWorkflowId) {
+          onTrackWorkflow?.(activeWorkflowId);
+        }
+
+        const response = isRevisionStage && activeWorkflowId
+          ? await authenticatedFetch(`/api/delivery/${encodeURIComponent(activeWorkflowId)}/revise`, {
+              method: 'POST',
+              body: JSON.stringify({
+                content: messageContent,
+              }),
+            })
+          : isUatFeedbackStage && activeWorkflowId
+            ? await authenticatedFetch(`/api/delivery/${encodeURIComponent(activeWorkflowId)}/feedback`, {
+                method: 'POST',
+                body: JSON.stringify({
+                  content: messageContent,
+                }),
+              })
+            : await authenticatedFetch('/api/delivery', {
+                method: 'POST',
+                body: JSON.stringify({
+                  projectName: selectedProject.name,
+                  projectPath: resolvedProjectPath,
+                  title: getNotificationSessionSummary(selectedSession, currentInput) || undefined,
+                  requirementText: messageContent,
+                  provider: 'codex',
+                }),
+              });
 
         const result = await response.json().catch(() => ({}));
         if (!response.ok) {
-          throw new Error(result.error || `Failed to create delivery workflow (${response.status})`);
+          throw new Error(
+            result.error
+            || (isRevisionStage || isUatFeedbackStage
+              ? `Failed to update delivery workflow (${response.status})`
+              : `Failed to create delivery workflow (${response.status})`),
+          );
+        }
+
+        const workflowId = typeof result?.workflow?.id === 'string' ? result.workflow.id : null;
+        if (workflowId) {
+          onTrackWorkflow?.(workflowId);
+        } else if (!activeWorkflowId) {
+          onTrackWorkflow?.(null);
+          onSetWorkflowTrackingPending?.(false);
         }
 
         addMessage({
           type: 'assistant',
-          content: 'Delivery workflow created. Continue in the Delivery tab to review requirements, confirm the prototype, and proceed to development.',
+          content: isRevisionStage
+            ? activeWorkflow?.stage === 'prototype'
+              ? t('workflowSession.progress.revisingPrototype')
+              : t('workflowSession.progress.revisingRequirement')
+            : isUatFeedbackStage
+              ? t('workflowSession.progress.submittingFeedback')
+              : t('workflowSession.progress.creating'),
           timestamp: new Date(),
+          isTaskNotification: true,
+          taskStatus: 'running',
         });
-
-        onOpenDeliveryTab?.();
 
         setInput('');
         inputValueRef.current = '';
@@ -527,10 +596,16 @@ export function useChatComposerState({
         safeLocalStorage.removeItem(`draft_input_${selectedProject.name}`);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
-        console.error('Failed to create delivery workflow:', error);
+        console.error('Failed to submit delivery workflow action:', error);
+        onSetWorkflowTrackingPending?.(false);
+        if (!activeWorkflowId) {
+          onTrackWorkflow?.(null);
+        }
         addMessage({
           type: 'error',
-          content: `Failed to create delivery workflow: ${message}`,
+          content: isRevisionStage || isUatFeedbackStage
+            ? `Failed to update delivery workflow: ${message}`
+            : `Failed to create delivery workflow: ${message}`,
           timestamp: new Date(),
         });
       } finally {
@@ -540,18 +615,12 @@ export function useChatComposerState({
       }
     },
     [
+      sessionWorkflow,
       selectedSession,
       attachedImages,
-      claudeModel,
-      codexModel,
-      currentSessionId,
-      cursorModel,
-      geminiModel,
       isLoading,
-      onSessionActive,
-      onSessionProcessing,
-      onOpenDeliveryTab,
-      pendingViewSessionRef,
+      onTrackWorkflow,
+      onSetWorkflowTrackingPending,
       resetCommandMenuState,
       scrollToBottom,
       selectedProject,
@@ -560,6 +629,7 @@ export function useChatComposerState({
       setClaudeStatus,
       setIsLoading,
       setIsUserScrolledUp,
+      t,
     ],
   );
 

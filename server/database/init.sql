@@ -160,6 +160,7 @@ CREATE INDEX IF NOT EXISTS idx_delivery_workflow_events_lookup
 CREATE TABLE IF NOT EXISTS delivery_workflow_feedback (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     workflow_id TEXT NOT NULL,
+    stage TEXT NOT NULL DEFAULT 'uat',
     content TEXT NOT NULL,
     resolved_in_attempt INTEGER,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

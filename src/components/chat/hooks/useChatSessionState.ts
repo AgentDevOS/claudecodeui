@@ -139,7 +139,7 @@ export function useChatSessionState({
   /* ---------------------------------------------------------------- */
 
   const activeSessionId = selectedSession?.id || currentSessionId || null;
-  const [pendingUserMessage, setPendingUserMessage] = useState<ChatMessage | null>(null);
+  const [pendingMessages, setPendingMessages] = useState<ChatMessage[]>([]);
 
   // Tell the store which session we're viewing so it only re-renders for this one
   const prevActiveForStoreRef = useRef<string | null>(null);
@@ -148,15 +148,17 @@ export function useChatSessionState({
     sessionStore.setActiveSession(activeSessionId);
   }
 
-  // When a real session ID arrives and we have a pending user message, flush it to the store
+  // When a real session ID arrives and we have pending messages, flush them to the store
   const prevActiveSessionRef = useRef<string | null>(null);
-  if (activeSessionId && activeSessionId !== prevActiveSessionRef.current && pendingUserMessage) {
+  if (activeSessionId && activeSessionId !== prevActiveSessionRef.current && pendingMessages.length > 0) {
     const prov = (localStorage.getItem('selected-provider') as SessionProvider) || 'codex';
-    const normalized = chatMessageToNormalized(pendingUserMessage, activeSessionId, prov);
-    if (normalized) {
-      sessionStore.appendRealtime(activeSessionId, normalized);
+    for (const pendingMessage of pendingMessages) {
+      const normalized = chatMessageToNormalized(pendingMessage, activeSessionId, prov);
+      if (normalized) {
+        sessionStore.appendRealtime(activeSessionId, normalized);
+      }
     }
-    setPendingUserMessage(null);
+    setPendingMessages([]);
   }
   prevActiveSessionRef.current = activeSessionId;
 
@@ -171,13 +173,13 @@ export function useChatSessionState({
 
   const chatMessages = useMemo(() => {
     const all = normalizedToChatMessages(storeMessages);
-    // Show pending user message when no session data exists yet (new session, pre-backend-response)
-    if (pendingUserMessage && all.length === 0) {
-      return [pendingUserMessage];
+    // Show pending local messages when no session data exists yet (new session, pre-backend-response)
+    if (pendingMessages.length > 0 && all.length === 0) {
+      return pendingMessages;
     }
     if (viewHiddenCount > 0 && viewHiddenCount < all.length) return all.slice(0, -viewHiddenCount);
     return all;
-  }, [storeMessages, viewHiddenCount, pendingUserMessage]);
+  }, [storeMessages, viewHiddenCount, pendingMessages]);
 
   /* ---------------------------------------------------------------- */
   /*  addMessage / clearMessages / rewindMessages                     */
@@ -185,8 +187,8 @@ export function useChatSessionState({
 
   const addMessage = useCallback((msg: ChatMessage) => {
     if (!activeSessionId) {
-      // No session yet — show as pending until the backend creates one
-      setPendingUserMessage(msg);
+      // No session yet — queue local messages until the backend creates one
+      setPendingMessages((current) => [...current, msg]);
       return;
     }
     const prov = (localStorage.getItem('selected-provider') as SessionProvider) || 'codex';
@@ -197,7 +199,10 @@ export function useChatSessionState({
   }, [activeSessionId, sessionStore]);
 
   const clearMessages = useCallback(() => {
-    if (!activeSessionId) return;
+    if (!activeSessionId) {
+      setPendingMessages([]);
+      return;
+    }
     sessionStore.clearRealtime(activeSessionId);
   }, [activeSessionId, sessionStore]);
 

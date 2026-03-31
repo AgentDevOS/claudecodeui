@@ -3,8 +3,10 @@ import {
   completeDeliveryWorkflow,
   confirmDeliveryWorkflow,
   createDeliveryWorkflow,
+  getDeliveryWorkflowForSession,
   getDeliveryWorkflowForUser,
   getDeliveryWorkflowsForProject,
+  reviseDeliveryWorkflow,
   submitDeliveryWorkflowFeedback,
 } from '../services/delivery-orchestrator.js';
 
@@ -49,6 +51,19 @@ router.post('/', async (req, res) => {
   }
 });
 
+router.get('/session/:sessionId', (req, res) => {
+  try {
+    const workflow = getDeliveryWorkflowForSession(req.params.sessionId, req.user.id);
+    if (!workflow) {
+      return res.status(404).json({ error: 'Workflow not found' });
+    }
+    return res.json({ workflow });
+  } catch (error) {
+    console.error('Failed to load delivery workflow for session:', error);
+    return res.status(500).json({ error: 'Failed to load delivery workflow for session', details: error.message });
+  }
+});
+
 router.get('/:workflowId', (req, res) => {
   try {
     const workflow = getDeliveryWorkflowForUser(req.params.workflowId, req.user.id);
@@ -59,6 +74,24 @@ router.get('/:workflowId', (req, res) => {
   } catch (error) {
     console.error('Failed to load delivery workflow:', error);
     return res.status(500).json({ error: 'Failed to load delivery workflow', details: error.message });
+  }
+});
+
+router.post('/:workflowId/revise', async (req, res) => {
+  try {
+    const { content } = req.body;
+    if (!content || typeof content !== 'string') {
+      return res.status(400).json({ error: 'revision content is required' });
+    }
+
+    const workflow = await reviseDeliveryWorkflow(req.params.workflowId, req.user.id, content.trim());
+    if (!workflow) {
+      return res.status(404).json({ error: 'Workflow not found' });
+    }
+    return res.json({ workflow });
+  } catch (error) {
+    console.error('Failed to submit delivery workflow revision:', error);
+    return res.status(400).json({ error: error.message || 'Failed to submit delivery workflow revision' });
   }
 });
 

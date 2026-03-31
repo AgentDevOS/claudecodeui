@@ -21,6 +21,91 @@ import { createNormalizedMessage } from './providers/types.js';
 // Track active sessions
 const activeCodexSessions = new Map();
 
+function createTimingTracker() {
+  const startedAt = Date.now();
+  const marks = {};
+
+  return {
+    mark(name) {
+      if (marks[name] == null) {
+        marks[name] = Date.now() - startedAt;
+      }
+    },
+    snapshot(extra = {}) {
+      return {
+        ...marks,
+        totalMs: Date.now() - startedAt,
+        ...extra,
+      };
+    },
+  };
+}
+
+function classifyCodexBottleneck(timing) {
+  const firstEventMs = timing.firstEventMs ?? null;
+  const firstTextMs = timing.firstTextMs ?? null;
+  const totalMs = timing.totalMs ?? null;
+
+  if (firstEventMs != null && firstEventMs >= 3000) {
+    return 'startup_or_model_queue';
+  }
+
+  if (
+    firstEventMs != null &&
+    firstTextMs != null &&
+    firstTextMs - firstEventMs >= 2000
+  ) {
+    return 'reasoning_or_tooling_before_text';
+  }
+
+  if (
+    firstTextMs != null &&
+    totalMs != null &&
+    totalMs - firstTextMs >= 4000
+  ) {
+    return 'long_generation_or_tool_tail';
+  }
+
+  if (firstTextMs == null && totalMs != null && totalMs >= 3000) {
+    return 'no_text_before_completion';
+  }
+
+  return 'balanced';
+}
+
+function logCodexTiming(sessionId, timing) {
+  console.info('[CodexTiming]', {
+    sessionId,
+    ...timing,
+  });
+}
+
+function diffStreamingText(previousText = '', nextText = '') {
+  if (!nextText) {
+    return '';
+  }
+
+  if (nextText.startsWith(previousText)) {
+    return nextText.slice(previousText.length);
+  }
+
+  return nextText;
+}
+
+function moveActiveSession(previousSessionId, nextSessionId) {
+  if (!previousSessionId || !nextSessionId || previousSessionId === nextSessionId) {
+    return;
+  }
+
+  const session = activeCodexSessions.get(previousSessionId);
+  if (!session) {
+    return;
+  }
+
+  activeCodexSessions.delete(previousSessionId);
+  activeCodexSessions.set(nextSessionId, session);
+}
+
 /**
  * Transform Codex SDK event to WebSocket message format
  * @param {object} event - SDK event
@@ -209,10 +294,17 @@ export async function queryCodex(command, options = {}, ws) {
   let currentSessionId = sessionId;
   let terminalFailure = null;
   const abortController = new AbortController();
+  const timing = createTimingTracker();
+  const streamedAgentTexts = new Map();
+  let emittedSessionCreated = false;
+  let eventCount = 0;
+  let streamedTextEvents = 0;
+  let streamedTextChars = 0;
 
   try {
     // Initialize Codex SDK
     codex = new Codex();
+    timing.mark('sdkInitMs');
 
     // Thread options with sandbox and approval settings
     const threadOptions = {
@@ -230,8 +322,9 @@ export async function queryCodex(command, options = {}, ws) {
       thread = codex.startThread(threadOptions);
     }
 
-    // Get the thread ID
-    currentSessionId = thread.id || sessionId || `codex-${Date.now()}`;
+    // New threads don't have a real ID until the first `thread.started` event arrives.
+    currentSessionId = thread.id || sessionId || `new-session-codex-${Date.now()}`;
+    timing.mark('threadReadyMs');
 
     // Track the session
     activeCodexSessions.set(currentSessionId, {
@@ -242,19 +335,96 @@ export async function queryCodex(command, options = {}, ws) {
       startedAt: new Date().toISOString()
     });
 
-    // Send session created event
-    sendMessage(ws, createNormalizedMessage({ kind: 'session_created', newSessionId: currentSessionId, sessionId: currentSessionId, provider: 'codex' }));
+    if (sessionId) {
+      sendMessage(ws, createNormalizedMessage({
+        kind: 'session_created',
+        newSessionId: currentSessionId,
+        sessionId: currentSessionId,
+        provider: 'codex',
+      }));
+      emittedSessionCreated = true;
+    }
 
     // Execute with streaming
     const streamedTurn = await thread.runStreamed(command, {
       signal: abortController.signal
     });
+    timing.mark('streamOpenMs');
 
     for await (const event of streamedTurn.events) {
+      eventCount += 1;
+      timing.mark('firstEventMs');
+
       // Check if session was aborted
       const session = activeCodexSessions.get(currentSessionId);
       if (!session || session.status === 'aborted') {
         break;
+      }
+
+      if (event.type === 'thread.started' && event.thread_id) {
+        const actualSessionId = event.thread_id;
+        moveActiveSession(currentSessionId, actualSessionId);
+        currentSessionId = actualSessionId;
+
+        if (!emittedSessionCreated) {
+          sendMessage(ws, createNormalizedMessage({
+            kind: 'session_created',
+            newSessionId: currentSessionId,
+            sessionId: currentSessionId,
+            provider: 'codex',
+          }));
+          emittedSessionCreated = true;
+        }
+        continue;
+      }
+
+      if (event.type === 'item.updated' && event.item?.type === 'agent_message') {
+        const nextText = event.item.text || '';
+        const previousText = streamedAgentTexts.get(event.item.id) || '';
+        const delta = diffStreamingText(previousText, nextText);
+
+        streamedAgentTexts.set(event.item.id, nextText);
+
+        if (delta) {
+          streamedTextEvents += 1;
+          streamedTextChars += delta.length;
+          timing.mark('firstTextMs');
+          sendMessage(ws, createNormalizedMessage({
+            kind: 'stream_delta',
+            content: delta,
+            sessionId: currentSessionId,
+            provider: 'codex',
+          }));
+        }
+        continue;
+      }
+
+      if (event.type === 'item.completed' && event.item?.type === 'agent_message') {
+        const nextText = event.item.text || '';
+        const previousText = streamedAgentTexts.get(event.item.id) || '';
+        const delta = diffStreamingText(previousText, nextText);
+
+        if (delta) {
+          streamedTextEvents += 1;
+          streamedTextChars += delta.length;
+          timing.mark('firstTextMs');
+          sendMessage(ws, createNormalizedMessage({
+            kind: 'stream_delta',
+            content: delta,
+            sessionId: currentSessionId,
+            provider: 'codex',
+          }));
+        }
+
+        if (streamedAgentTexts.has(event.item.id) || delta) {
+          sendMessage(ws, createNormalizedMessage({
+            kind: 'stream_end',
+            sessionId: currentSessionId,
+            provider: 'codex',
+          }));
+          streamedAgentTexts.delete(event.item.id);
+          continue;
+        }
       }
 
       if (event.type === 'item.started' || event.type === 'item.updated') {
@@ -289,7 +459,21 @@ export async function queryCodex(command, options = {}, ws) {
 
     // Send completion event
     if (!terminalFailure) {
-      sendMessage(ws, createNormalizedMessage({ kind: 'complete', actualSessionId: thread.id, sessionId: currentSessionId, provider: 'codex' }));
+      const timingSnapshot = timing.snapshot({
+        eventCount,
+        streamedTextEvents,
+        streamedTextChars,
+      });
+      timingSnapshot.bottleneck = classifyCodexBottleneck(timingSnapshot);
+      logCodexTiming(currentSessionId, timingSnapshot);
+
+      sendMessage(ws, createNormalizedMessage({
+        kind: 'complete',
+        actualSessionId: thread.id || currentSessionId,
+        sessionId: currentSessionId,
+        provider: 'codex',
+        timing: timingSnapshot,
+      }));
       notifyRunStopped({
         userId: ws?.userId || null,
         provider: 'codex',
@@ -308,7 +492,24 @@ export async function queryCodex(command, options = {}, ws) {
 
     if (!wasAborted) {
       console.error('[Codex] Error:', error);
-      sendMessage(ws, createNormalizedMessage({ kind: 'error', content: error.message, sessionId: currentSessionId, provider: 'codex' }));
+      const timingSnapshot = timing.snapshot({
+        eventCount,
+        streamedTextEvents,
+        streamedTextChars,
+      });
+      timingSnapshot.bottleneck = classifyCodexBottleneck(timingSnapshot);
+      logCodexTiming(currentSessionId, {
+        ...timingSnapshot,
+        failed: true,
+      });
+
+      sendMessage(ws, createNormalizedMessage({
+        kind: 'error',
+        content: error.message,
+        sessionId: currentSessionId,
+        provider: 'codex',
+        timing: timingSnapshot,
+      }));
       if (!terminalFailure) {
         notifyRunFailed({
           userId: ws?.userId || null,
@@ -393,9 +594,12 @@ function sendMessage(ws, data) {
     if (ws.isSSEStreamWriter || ws.isWebSocketWriter) {
       // Writer handles stringification (SSEStreamWriter or WebSocketWriter)
       ws.send(data);
-    } else if (typeof ws.send === 'function') {
+    } else if (typeof ws.send === 'function' && (typeof ws.readyState === 'number' || typeof ws.ping === 'function')) {
       // Raw WebSocket - stringify here
       ws.send(JSON.stringify(data));
+    } else if (typeof ws.send === 'function') {
+      // Plain internal writers should receive the normalized object directly.
+      ws.send(data);
     }
   } catch (error) {
     console.error('[Codex] Error sending message:', error);

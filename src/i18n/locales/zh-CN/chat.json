@@ -138,6 +138,49 @@
     "clearInput": "清空输入",
     "scrollToBottom": "滚动到底部"
   },
+  "workflowSession": {
+    "defaultTitle": "交付工作流",
+    "noSummary": "当前阶段已准备就绪。",
+    "attempt": "第 {{count}} 轮",
+    "actions": {
+      "confirm": "确认",
+      "markDelivered": "标记为已交付",
+      "processing": "处理中..."
+    },
+    "helpers": {
+      "reviseCurrentStage": "直接在聊天输入框里补充修改意见；如果当前结果没问题，就点确认继续。",
+      "submitUatFeedback": "直接在聊天输入框里提交 UAT 问题或后续调整；如果没问题，就标记为已交付。",
+      "running": "当前阶段正在执行。输出准备好后会自动打开新的阶段会话。",
+      "completed": "当前工作流已交付完成。",
+      "inspect": "在聊天里查看当前阶段输出，并从这里继续推进。"
+    },
+    "progress": {
+      "creating": "正在整理需求，请稍候。",
+      "revisingRequirement": "正在根据你的反馈更新需求，请稍候。",
+      "revisingPrototype": "正在根据你的反馈更新原型，请稍候。",
+      "submittingFeedback": "正在根据你的反馈继续开发并测试，请稍候。"
+    },
+    "placeholders": {
+      "requirement": "补充需求修改意见。发送后会重新生成需求阶段输出。",
+      "prototype": "补充原型修改意见。发送后会重新生成原型阶段输出。",
+      "uat": "描述 UAT 中发现的问题、要调整的地方或后续需求。"
+    },
+    "stages": {
+      "requirement": "需求",
+      "prototype": "原型",
+      "development": "开发",
+      "uat": "UAT",
+      "delivery": "交付"
+    },
+    "statuses": {
+      "queued": "排队中",
+      "running": "执行中",
+      "waiting_confirm": "等待确认",
+      "waiting_feedback": "等待 UAT 反馈",
+      "failed": "失败",
+      "completed": "已完成"
+    }
+  },
   "thinkingMode": {
     "selector": {
       "title": "思考模式",

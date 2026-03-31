@@ -249,6 +249,7 @@ const runMigrations = () => {
       CREATE TABLE IF NOT EXISTS delivery_workflow_feedback (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         workflow_id TEXT NOT NULL,
+        stage TEXT NOT NULL DEFAULT 'uat',
         content TEXT NOT NULL,
         resolved_in_attempt INTEGER,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -259,6 +260,13 @@ const runMigrations = () => {
       CREATE INDEX IF NOT EXISTS idx_delivery_workflow_feedback_lookup
       ON delivery_workflow_feedback(workflow_id, created_at DESC)
     `);
+
+    const deliveryFeedbackInfo = db.prepare("PRAGMA table_info(delivery_workflow_feedback)").all();
+    const deliveryFeedbackColumns = deliveryFeedbackInfo.map((column) => column.name);
+    if (!deliveryFeedbackColumns.includes('stage')) {
+      console.log('Running migration: Adding stage column to delivery_workflow_feedback');
+      db.exec("ALTER TABLE delivery_workflow_feedback ADD COLUMN stage TEXT NOT NULL DEFAULT 'uat'");
+    }
 
     console.log('Database migrations completed successfully');
   } catch (error) {
@@ -271,9 +279,20 @@ const runMigrations = () => {
 const initializeDatabase = async () => {
   try {
     const initSQL = fs.readFileSync(INIT_SQL_PATH, 'utf8');
+    const hasUsersTable = Boolean(
+      db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'users'").get()
+    );
+
+    if (hasUsersTable) {
+      runMigrations();
+    }
+
     db.exec(initSQL);
     console.log('Database initialized successfully');
-    runMigrations();
+
+    if (!hasUsersTable) {
+      runMigrations();
+    }
   } catch (error) {
     console.error('Error initializing database:', error.message);
     throw error;
@@ -893,6 +912,31 @@ const deliveryWorkflowsDb = {
     return rows.map(hydrateDeliveryWorkflow);
   },
 
+  getWorkflowsByUser: (userId) => {
+    const rows = db.prepare(`
+      SELECT * FROM delivery_workflows
+      WHERE user_id = ?
+      ORDER BY datetime(updated_at) DESC, datetime(created_at) DESC
+    `).all(userId);
+
+    return rows.map(hydrateDeliveryWorkflow);
+  },
+
+  getWorkflowByActiveSessionId: (userId, activeSessionId) => {
+    if (!activeSessionId) {
+      return null;
+    }
+
+    const row = db.prepare(`
+      SELECT * FROM delivery_workflows
+      WHERE user_id = ? AND active_session_id = ?
+      ORDER BY datetime(updated_at) DESC
+      LIMIT 1
+    `).get(userId, activeSessionId);
+
+    return hydrateDeliveryWorkflow(row);
+  },
+
   updateWorkflow: (id, updates, userId = null) => {
     const existing = deliveryWorkflowsDb.getWorkflowById(id, userId);
     if (!existing) {
@@ -978,27 +1022,34 @@ const deliveryWorkflowsDb = {
       }));
   },
 
-  addFeedback: ({ workflowId, content, resolvedInAttempt = null }) => {
+  addFeedback: ({ workflowId, stage = 'uat', content, resolvedInAttempt = null }) => {
     const result = db.prepare(`
-      INSERT INTO delivery_workflow_feedback (workflow_id, content, resolved_in_attempt)
-      VALUES (?, ?, ?)
-    `).run(workflowId, content, resolvedInAttempt);
+      INSERT INTO delivery_workflow_feedback (workflow_id, stage, content, resolved_in_attempt)
+      VALUES (?, ?, ?, ?)
+    `).run(workflowId, stage, content, resolvedInAttempt);
 
     return db.prepare('SELECT * FROM delivery_workflow_feedback WHERE id = ?').get(result.lastInsertRowid);
   },
 
-  getFeedback: (workflowId) => {
-    const rows = db.prepare(`
-      SELECT * FROM delivery_workflow_feedback
-      WHERE workflow_id = ?
-      ORDER BY id DESC
-    `).all(workflowId);
+  getFeedback: (workflowId, stage = null) => {
+    const rows = stage == null
+      ? db.prepare(`
+        SELECT * FROM delivery_workflow_feedback
+        WHERE workflow_id = ?
+        ORDER BY id DESC
+      `).all(workflowId)
+      : db.prepare(`
+        SELECT * FROM delivery_workflow_feedback
+        WHERE workflow_id = ? AND stage = ?
+        ORDER BY id DESC
+      `).all(workflowId, stage);
 
     return rows
       .reverse()
       .map((row) => ({
         id: row.id,
         workflowId: row.workflow_id,
+        stage: row.stage || 'uat',
         content: row.content,
         resolvedInAttempt: row.resolved_in_attempt,
         createdAt: row.created_at,
