@@ -7,10 +7,11 @@ type CodexLogoProps = {
 
 const CodexLogo = ({ className = 'w-5 h-5' }: CodexLogoProps) => {
   const { isDarkMode } = useTheme();
+  const baseUrl = import.meta.env.BASE_URL;
 
   return (
     <img
-      src={isDarkMode ? "/icons/codex-white.svg" : "/icons/codex.svg"}
+      src={`${baseUrl}icons/${isDarkMode ? 'codex-white.svg' : 'codex.svg'}`}
       alt="Codex"
       className={className}
     />

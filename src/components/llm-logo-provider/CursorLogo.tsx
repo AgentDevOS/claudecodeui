@@ -7,10 +7,11 @@ type CursorLogoProps = {
 
 const CursorLogo = ({ className = 'w-5 h-5' }: CursorLogoProps) => {
   const { isDarkMode } = useTheme();
+  const baseUrl = import.meta.env.BASE_URL;
 
   return (
     <img
-      src={isDarkMode ? "/icons/cursor-white.svg" : "/icons/cursor.svg"}
+      src={`${baseUrl}icons/${isDarkMode ? 'cursor-white.svg' : 'cursor.svg'}`}
       alt="Cursor"
       className={className}
     />

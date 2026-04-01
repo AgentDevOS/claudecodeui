@@ -9,7 +9,19 @@ import { PluginsProvider } from './contexts/PluginsContext';
 import AppContent from './components/app/AppContent';
 import i18n from './i18n/config.js';
 
+function resolveRouterBasename() {
+  const configuredBasename = window.__ROUTER_BASENAME__ ?? import.meta.env.BASE_URL ?? '/';
+
+  if (configuredBasename === '/') {
+    return '/';
+  }
+
+  return configuredBasename.replace(/\/+$/, '');
+}
+
 export default function App() {
+  const routerBasename = resolveRouterBasename();
+
   return (
     <I18nextProvider i18n={i18n}>
       <ThemeProvider>
@@ -19,7 +31,7 @@ export default function App() {
               <TasksSettingsProvider>
                 <TaskMasterProvider>
                 <ProtectedRoute>
-                  <Router basename={window.__ROUTER_BASENAME__ || ''}>
+                  <Router basename={routerBasename}>
                     <Routes>
                       <Route path="/" element={<AppContent />} />
                       <Route path="/session/:sessionId" element={<AppContent />} />
