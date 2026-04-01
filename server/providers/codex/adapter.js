@@ -7,6 +7,7 @@
 
 import { getCodexSessionMessages } from '../../projects.js';
 import { createNormalizedMessage, generateMessageId } from '../types.js';
+import { isInternalCodexContent } from '../utils.js';
 
 const PROVIDER = 'codex';
 
@@ -46,7 +47,7 @@ function normalizeCodexHistoryEntry(raw, sessionId) {
       : Array.isArray(raw.message.content)
         ? raw.message.content.map(p => typeof p === 'string' ? p : p?.text || '').filter(Boolean).join('\n')
         : '';
-    if (!content.trim()) return [];
+    if (!content.trim() || isInternalCodexContent(content)) return [];
     return [createNormalizedMessage({
       id: baseId,
       sessionId,
@@ -86,6 +87,10 @@ function normalizeCodexHistoryEntry(raw, sessionId) {
 
   // Tool result
   if (raw.type === 'tool_result') {
+    if (isInternalCodexContent(raw.output || '')) {
+      return [];
+    }
+
     return [createNormalizedMessage({
       id: baseId,
       sessionId,
@@ -120,6 +125,10 @@ export function normalizeMessage(raw, sessionId) {
   if (raw.type === 'item') {
     switch (raw.itemType) {
       case 'agent_message':
+        if (isInternalCodexContent(raw.message?.content || '')) {
+          return [];
+        }
+
         return [createNormalizedMessage({
           id: baseId, sessionId, timestamp: ts, provider: PROVIDER,
           kind: 'text', role: 'assistant', content: raw.message?.content || '',

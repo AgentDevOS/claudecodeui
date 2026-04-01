@@ -27,3 +27,25 @@ export const INTERNAL_CONTENT_PREFIXES = Object.freeze([
 export function isInternalContent(content) {
   return INTERNAL_CONTENT_PREFIXES.some(prefix => content.startsWith(prefix));
 }
+
+/**
+ * Check if Codex assistant text is internal progress chatter that should be hidden.
+ * @param {string} content
+ * @returns {boolean}
+ */
+export function isInternalCodexContent(content) {
+  if (typeof content !== 'string') {
+    return false;
+  }
+
+  const normalized = content.trim();
+  if (!normalized) {
+    return false;
+  }
+
+  if (normalized === 'Plan updated') {
+    return true;
+  }
+
+  return false;
+}

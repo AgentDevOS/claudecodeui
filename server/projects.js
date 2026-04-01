@@ -1613,6 +1613,31 @@ function isVisibleCodexUserMessage(payload) {
   return true;
 }
 
+function isHiddenCodexAssistantMessage(payload) {
+  if (!payload || payload.type !== 'message' || payload.role !== 'assistant') {
+    return false;
+  }
+
+  return payload.phase === 'commentary';
+}
+
+function isHiddenCodexToolResult(payload) {
+  if (!payload || payload.type !== 'function_call_output') {
+    return false;
+  }
+
+  const output = typeof payload.output === 'string' ? payload.output.trim() : '';
+  if (!output) {
+    return false;
+  }
+
+  if (output === 'Plan updated') {
+    return true;
+  }
+
+  return false;
+}
+
 // Parse a Codex session JSONL file to extract metadata
 async function parseCodexSessionFile(filePath) {
   try {
@@ -1656,7 +1681,12 @@ async function parseCodexSessionFile(filePath) {
             }
           }
 
-          if (entry.type === 'response_item' && entry.payload?.type === 'message' && entry.payload.role === 'assistant') {
+          if (
+            entry.type === 'response_item'
+            && entry.payload?.type === 'message'
+            && entry.payload.role === 'assistant'
+            && !isHiddenCodexAssistantMessage(entry.payload)
+          ) {
             messageCount++;
           }
 
@@ -1753,7 +1783,8 @@ async function getCodexSessionMessages(sessionId, limit = null, offset = 0) {
           if (
             entry.type === 'response_item' &&
             entry.payload?.type === 'message' &&
-            entry.payload.role === 'assistant'
+            entry.payload.role === 'assistant' &&
+            !isHiddenCodexAssistantMessage(entry.payload)
           ) {
             const content = entry.payload.content;
             const textContent = extractText(content);
@@ -1813,6 +1844,10 @@ async function getCodexSessionMessages(sessionId, limit = null, offset = 0) {
           }
 
           if (entry.type === 'response_item' && entry.payload?.type === 'function_call_output') {
+            if (isHiddenCodexToolResult(entry.payload)) {
+              continue;
+            }
+
             messages.push({
               type: 'tool_result',
               timestamp: entry.timestamp,

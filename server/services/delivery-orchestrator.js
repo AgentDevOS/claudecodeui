@@ -601,6 +601,11 @@ export function isWorkflowRunning(workflowId) {
 }
 
 export async function createDeliveryWorkflow({ userId, projectName, projectPath, title, requirementText, provider = 'codex' }) {
+  const existingWorkflow = deliveryWorkflowsDb.getLatestOpenWorkflowByProject(userId, projectName);
+  if (existingWorkflow) {
+    return deliveryWorkflowsDb.getWorkflowById(existingWorkflow.id, userId);
+  }
+
   const id = `wf_${crypto.randomUUID()}`;
   const workflow = deliveryWorkflowsDb.createWorkflow({
     id,

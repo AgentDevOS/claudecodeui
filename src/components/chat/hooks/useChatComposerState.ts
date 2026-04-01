@@ -456,7 +456,7 @@ export function useChatComposerState({
 
       const messageContent = currentInput;
       const activeWorkflow =
-        sessionWorkflow && selectedSession?.id && sessionWorkflow.activeSessionId === selectedSession.id
+        sessionWorkflow && sessionWorkflow.status !== 'completed'
           ? sessionWorkflow
           : null;
       const isRevisionStage = Boolean(
@@ -476,6 +476,15 @@ export function useChatComposerState({
         addMessage({
           type: 'assistant',
           content: 'This workflow stage is still running. Wait for the next stage session or result card before sending more input.',
+          timestamp: new Date(),
+        });
+        return;
+      }
+
+      if (activeWorkflow?.status === 'failed') {
+        addMessage({
+          type: 'assistant',
+          content: '当前项目流程处于失败状态，请先在交付面板中重试当前阶段，不会自动新建需求分析流程。',
           timestamp: new Date(),
         });
         return;

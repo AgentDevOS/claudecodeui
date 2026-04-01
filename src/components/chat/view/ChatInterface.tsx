@@ -443,7 +443,8 @@ function ChatInterface({
         }]
       : []
   ), [isHoldingWorkflowSession, t]);
-  const isWorkflowFallbackView = !hasPersistedChatMessages && workflowChatMessages.length > 0;
+  const shouldPreferWorkflowMessages = Boolean(sessionWorkflow) && workflowChatMessages.length > 0;
+  const isWorkflowFallbackView = shouldPreferWorkflowMessages || (!hasPersistedChatMessages && workflowChatMessages.length > 0);
   const isHoldingWorkflowFallbackView = !hasPersistedChatMessages && isHoldingWorkflowSession;
   const displayedChatMessages = isWorkflowFallbackView
     ? workflowChatMessages

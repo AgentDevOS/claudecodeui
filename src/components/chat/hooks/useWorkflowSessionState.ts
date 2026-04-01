@@ -162,7 +162,7 @@ export function useWorkflowSessionState({
   const [isLoading, setIsLoading] = useState(false);
 
   const refreshWorkflow = useCallback(async () => {
-    if (!selectedSession?.id && !trackedWorkflowId) {
+    if (!selectedProject?.name && !selectedSession?.id && !trackedWorkflowId) {
       setWorkflow(null);
       return null;
     }

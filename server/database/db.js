@@ -946,6 +946,17 @@ const deliveryWorkflowsDb = {
     return rows.map(hydrateDeliveryWorkflow);
   },
 
+  getLatestOpenWorkflowByProject: (userId, projectName) => {
+    const row = db.prepare(`
+      SELECT * FROM delivery_workflows
+      WHERE user_id = ? AND project_name = ? AND status != 'completed'
+      ORDER BY datetime(updated_at) DESC, datetime(created_at) DESC
+      LIMIT 1
+    `).get(userId, projectName);
+
+    return hydrateDeliveryWorkflow(row);
+  },
+
   getWorkflowsByUser: (userId) => {
     const rows = db.prepare(`
       SELECT * FROM delivery_workflows
