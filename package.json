@@ -15,13 +15,13 @@
     "scripts/",
     "README.md"
   ],
-  "homepage": "https://cloudcli.ai",
+  "homepage": "https://auto.huibanxue.com/aisoft/ui/",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/siteboon/claudecodeui.git"
+    "url": "https://auto.huibanxue.com/aisoft/ui/"
   },
   "bugs": {
-    "url": "https://github.com/siteboon/claudecodeui/issues"
+    "url": "https://auto.huibanxue.com/aisoft/ui/"
   },
   "scripts": {
     "dev": "./scripts/restart-dev.sh",
@@ -46,7 +46,7 @@
     "ui",
     "mobile"
   ],
-  "author": "CloudCLI UI Contributors",
+  "author": "AISoft Contributors",
   "license": "AGPL-3.0-or-later",
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.59",

@@ -1,0 +1,32 @@
+- main [ref=e2]:
+  - generic [ref=e3]:
+    - paragraph [ref=e4]: 轻量原型
+    - heading "基础计算器" [level=1] [ref=e5]
+    - paragraph [ref=e6]: 支持加、减、乘、除、清空与错误提示，适配桌面和移动端浏览器预览。
+  - region "基础计算器" [ref=e7]:
+    - generic [ref=e8]:
+      - generic [ref=e9]: 当前输入 准备就绪
+      - generic [ref=e10]: "0"
+      - status [ref=e11]: "0"
+    - generic [ref=e12]:
+      - button "AC" [ref=e13]
+      - button "DEL" [ref=e14]
+      - button "÷" [ref=e15]
+      - button "×" [ref=e16]
+      - button "7" [ref=e17]
+      - button "8" [ref=e18]
+      - button "9" [ref=e19]
+      - button "-" [ref=e20]
+      - button "4" [ref=e21]
+      - button "5" [ref=e22]
+      - button "6" [ref=e23]
+      - button "+" [ref=e24]
+      - button "1" [ref=e25]
+      - button "2" [ref=e26]
+      - button "3" [ref=e27]
+      - button "=" [ref=e28]
+      - button "0" [ref=e29]
+      - button "." [ref=e30]
+    - generic [ref=e31]:
+      - paragraph [ref=e32]: 支持整数与小数单次计算。
+      - paragraph [ref=e33]: 除数为 0 或无效输入时会显示明确提示。

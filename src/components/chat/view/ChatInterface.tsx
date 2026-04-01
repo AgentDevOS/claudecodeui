@@ -431,6 +431,7 @@ function ChatInterface({
     && selectedSession.id === pendingWorkflowSessionId
     && !sessionWorkflow,
   );
+  const hasPersistedChatMessages = chatMessages.length > 0;
   const holdingWorkflowMessages = useMemo(() => (
     isHoldingWorkflowSession
       ? [{
@@ -442,34 +443,35 @@ function ChatInterface({
         }]
       : []
   ), [isHoldingWorkflowSession, t]);
-  const isWorkflowMessageView = workflowChatMessages.length > 0;
-  const displayedChatMessages = isWorkflowMessageView
+  const isWorkflowFallbackView = !hasPersistedChatMessages && workflowChatMessages.length > 0;
+  const isHoldingWorkflowFallbackView = !hasPersistedChatMessages && isHoldingWorkflowSession;
+  const displayedChatMessages = isWorkflowFallbackView
     ? workflowChatMessages
-    : isHoldingWorkflowSession
+    : isHoldingWorkflowFallbackView
       ? holdingWorkflowMessages
       : chatMessages;
-  const displayedVisibleMessages = isWorkflowMessageView
+  const displayedVisibleMessages = isWorkflowFallbackView
     ? workflowChatMessages
-    : isHoldingWorkflowSession
+    : isHoldingWorkflowFallbackView
       ? holdingWorkflowMessages
       : visibleMessages;
-  const displayedIsLoadingSessionMessages = isWorkflowMessageView || isHoldingWorkflowSession ? false : isLoadingSessionMessages;
-  const displayedIsLoading = isWorkflowMessageView ? false : isLoading;
-  const displayedHasMoreMessages = isWorkflowMessageView || isHoldingWorkflowSession ? false : hasMoreMessages;
-  const displayedTotalMessages = isWorkflowMessageView
+  const displayedIsLoadingSessionMessages = isWorkflowFallbackView || isHoldingWorkflowFallbackView ? false : isLoadingSessionMessages;
+  const displayedIsLoading = isWorkflowFallbackView ? false : isLoading;
+  const displayedHasMoreMessages = isWorkflowFallbackView || isHoldingWorkflowFallbackView ? false : hasMoreMessages;
+  const displayedTotalMessages = isWorkflowFallbackView
     ? workflowChatMessages.length
-    : isHoldingWorkflowSession
+    : isHoldingWorkflowFallbackView
       ? holdingWorkflowMessages.length
       : totalMessages;
-  const displayedVisibleMessageCount = isWorkflowMessageView
+  const displayedVisibleMessageCount = isWorkflowFallbackView
     ? workflowChatMessages.length
-    : isHoldingWorkflowSession
+    : isHoldingWorkflowFallbackView
       ? holdingWorkflowMessages.length
       : visibleMessageCount;
-  const displayedAllMessagesLoaded = isWorkflowMessageView || isHoldingWorkflowSession ? false : allMessagesLoaded;
-  const displayedIsLoadingAllMessages = isWorkflowMessageView || isHoldingWorkflowSession ? false : isLoadingAllMessages;
-  const displayedLoadAllJustFinished = isWorkflowMessageView || isHoldingWorkflowSession ? false : loadAllJustFinished;
-  const displayedShowLoadAllOverlay = isWorkflowMessageView || isHoldingWorkflowSession ? false : showLoadAllOverlay;
+  const displayedAllMessagesLoaded = isWorkflowFallbackView || isHoldingWorkflowFallbackView ? false : allMessagesLoaded;
+  const displayedIsLoadingAllMessages = isWorkflowFallbackView || isHoldingWorkflowFallbackView ? false : isLoadingAllMessages;
+  const displayedLoadAllJustFinished = isWorkflowFallbackView || isHoldingWorkflowFallbackView ? false : loadAllJustFinished;
+  const displayedShowLoadAllOverlay = isWorkflowFallbackView || isHoldingWorkflowFallbackView ? false : showLoadAllOverlay;
 
   if (!selectedProject) {
     const selectedProviderLabel =
@@ -497,7 +499,7 @@ function ChatInterface({
 
   return (
     <>
-      <div className="flex h-full flex-col">
+      <div className="flex h-full min-h-0 flex-col">
         {sessionWorkflow && (
           <WorkflowStagePanel
             workflow={sessionWorkflow}
@@ -524,7 +526,7 @@ function ChatInterface({
           isTaskMasterInstalled={isTaskMasterInstalled}
           onShowAllTasks={onShowAllTasks}
           setInput={setInput}
-          isLoadingMoreMessages={isWorkflowMessageView ? false : isLoadingMoreMessages}
+          isLoadingMoreMessages={isWorkflowFallbackView ? false : isLoadingMoreMessages}
           hasMoreMessages={displayedHasMoreMessages}
           totalMessages={displayedTotalMessages}
           sessionMessagesCount={displayedChatMessages.length}

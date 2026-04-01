@@ -3,9 +3,13 @@ import { existsSync, mkdirSync, promises as fs } from 'fs';
 import path from 'path';
 import { spawn } from 'child_process';
 import crypto from 'crypto';
-import os from 'os';
 import { addProjectManually } from '../projects.js';
 import { deliveryWorkflowsDb, userDb, userProjectsDb } from '../database/db.js';
+import {
+  getConfiguredWorkspacesRoot,
+  getLegacyWorkspaceRootForUserId,
+  getWorkspaceRootForPublicId,
+} from '../utils/workspace-paths.js';
 
 const router = express.Router();
 
@@ -14,49 +18,25 @@ function sanitizeGitError(message, token) {
   return message.replace(new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '***');
 }
 
-const DEFAULT_WORKSPACES_ROOT_CANDIDATES = [
-  'workspace',
-  'Workspace',
-  'Projects',
-  'Development',
-  'Dev',
-  'Code',
-].map((dirName) => path.join(os.homedir(), dirName));
-
-const getDefaultWorkspacesRoot = () => {
-  const existingCandidate = DEFAULT_WORKSPACES_ROOT_CANDIDATES.find((candidate) => existsSync(candidate));
-  return existingCandidate || DEFAULT_WORKSPACES_ROOT_CANDIDATES[0];
-};
-
 // Configure allowed workspace root. Prefer an explicit env override; otherwise
 // keep browsing inside a dedicated development directory instead of exposing the whole home folder.
-export const WORKSPACES_ROOT = process.env.WORKSPACES_ROOT || getDefaultWorkspacesRoot();
+export const WORKSPACES_ROOT = getConfiguredWorkspacesRoot();
 
 if (!existsSync(WORKSPACES_ROOT)) {
   mkdirSync(WORKSPACES_ROOT, { recursive: true });
 }
 
 function getLegacyWorkspaceRootForUser(userId) {
-  const normalizedUserId = String(userId ?? '').trim();
-  if (!normalizedUserId) {
-    throw new Error('A valid user ID is required to resolve the workspace root');
-  }
-
-  return path.join(WORKSPACES_ROOT, 'users', normalizedUserId, 'workspaces');
+  return getLegacyWorkspaceRootForUserId(userId, WORKSPACES_ROOT);
 }
 
 export function getWorkspaceRootForUser(userId) {
-  const normalizedUserId = String(userId ?? '').trim();
-  if (!normalizedUserId) {
-    throw new Error('A valid user ID is required to resolve the workspace root');
-  }
-
   const publicId = userDb.getPublicId(userId);
   if (!publicId) {
-    throw new Error(`No public workspace identifier found for user ${normalizedUserId}`);
+    throw new Error(`No public workspace identifier found for user ${String(userId ?? '').trim()}`);
   }
 
-  return path.join(WORKSPACES_ROOT, 'users', publicId, 'workspaces');
+  return getWorkspaceRootForPublicId(publicId, WORKSPACES_ROOT);
 }
 
 export async function ensureWorkspaceRootForUser(userId) {
@@ -66,6 +46,9 @@ export async function ensureWorkspaceRootForUser(userId) {
   if (legacyWorkspaceRoot !== workspaceRoot && existsSync(legacyWorkspaceRoot) && !existsSync(workspaceRoot)) {
     await fs.mkdir(path.dirname(workspaceRoot), { recursive: true });
     await fs.rename(legacyWorkspaceRoot, workspaceRoot);
+  }
+
+  if (legacyWorkspaceRoot !== workspaceRoot) {
     userProjectsDb.migrateProjectPathPrefix(userId, legacyWorkspaceRoot, workspaceRoot);
     deliveryWorkflowsDb.migrateProjectPathPrefix(userId, legacyWorkspaceRoot, workspaceRoot);
   }

@@ -284,6 +284,17 @@ export function useChatRealtimeHandlers({
             setTimeout(() => window.refreshProjects?.(), 500);
           }
         }
+
+        // Some final persisted messages can land on disk without a matching
+        // realtime text event. Refresh on completion so the UI catches up
+        // immediately instead of waiting for a manual page refresh.
+        if (sid && selectedProject) {
+          void sessionStore.refreshFromServer(sid, {
+            provider,
+            projectName: selectedProject.name,
+            projectPath: selectedProject.fullPath || selectedProject.path || '',
+          });
+        }
         break;
       }
 

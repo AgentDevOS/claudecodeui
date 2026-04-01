@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Project } from '../../../types/app';
 import { api } from '../../../utils/api';
+import { resolveAppUrl } from '../../../lib/utils.js';
 
 type DeliveryWorkflowMessage = {
   type?: string;
@@ -94,6 +95,8 @@ function getEventSummary(
       return t('deliveryWorkflow.events.stageConfirmed', { stage: confirmedStageLabel });
     case 'feedback_submitted':
       return t('deliveryWorkflow.events.feedbackSubmitted');
+    case 'stage_retried':
+      return t('deliveryWorkflow.events.stageRetried', { stage: currentStageLabel });
     case 'revision_submitted':
       return t('deliveryWorkflow.events.revisionSubmitted', { stage: currentStageLabel });
     case 'workflow_completed':
@@ -134,9 +137,9 @@ function getStatusTone(status: string) {
 
 function WorkflowLinks({ workflow }: { workflow: DeliveryWorkflow }) {
   const { t } = useTranslation('common');
-  const prototypeUrl = workflow.data?.publicUrls?.prototypePreview;
-  const uatUrl = workflow.data?.uat?.previewUrl || workflow.data?.publicUrls?.uatPreview;
-  const runtimeUrl = workflow.data?.uat?.runtimeUrl || workflow.data?.publicUrls?.runtime;
+  const prototypeUrl = resolveAppUrl(workflow.data?.publicUrls?.prototypePreview);
+  const uatUrl = resolveAppUrl(workflow.data?.uat?.previewUrl || workflow.data?.publicUrls?.uatPreview);
+  const runtimeUrl = resolveAppUrl(workflow.data?.uat?.runtimeUrl || workflow.data?.publicUrls?.runtime);
 
   return (
     <div className="grid gap-2">
@@ -256,6 +259,8 @@ export default function DeliveryWorkflowPanel({ selectedProject, latestMessage }
 
   const canSubmitFeedback = selectedWorkflow?.stage === 'uat' && selectedWorkflow.status === 'waiting_feedback';
   const canComplete = canSubmitFeedback;
+  const canRetry = selectedWorkflow?.status === 'failed'
+    && ['requirement', 'prototype', 'development'].includes(selectedWorkflow.stage);
 
   const handleCreateWorkflow = useCallback(async () => {
     if (!requirementText.trim()) {
@@ -339,6 +344,25 @@ export default function DeliveryWorkflowPanel({ selectedProject, latestMessage }
       setError(null);
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : t('deliveryWorkflow.errors.completeWorkflow'));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [refreshSelectedWorkflow, refreshWorkflows, selectedWorkflow, t]);
+
+  const handleRetry = useCallback(async () => {
+    if (!selectedWorkflow) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const response = await api.delivery.retry(selectedWorkflow.id);
+      await parseJsonResponse(response);
+      await refreshWorkflows(true);
+      await refreshSelectedWorkflow(selectedWorkflow.id);
+      setError(null);
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : t('deliveryWorkflow.errors.retryWorkflow'));
     } finally {
       setIsSubmitting(false);
     }
@@ -462,6 +486,16 @@ export default function DeliveryWorkflowPanel({ selectedProject, latestMessage }
                         disabled={isSubmitting}
                       >
                         {t('buttons.confirm')}
+                      </button>
+                    )}
+                    {canRetry && (
+                      <button
+                        type="button"
+                        className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
+                        onClick={() => void handleRetry()}
+                        disabled={isSubmitting}
+                      >
+                        {t('buttons.retry')}
                       </button>
                     )}
                     {canComplete && (

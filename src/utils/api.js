@@ -221,6 +221,12 @@ export const api = {
         body: JSON.stringify({ content }),
       }),
 
+    retry: (workflowId) =>
+      authenticatedFetch(`/api/delivery/${encodeURIComponent(workflowId)}/retry`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      }),
+
     submitFeedback: (workflowId, content) =>
       authenticatedFetch(`/api/delivery/${encodeURIComponent(workflowId)}/feedback`, {
         method: 'POST',

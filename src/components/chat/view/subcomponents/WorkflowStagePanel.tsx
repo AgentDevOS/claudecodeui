@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SessionWorkflow } from '../../hooks/useWorkflowSessionState';
+import { resolveAppUrl } from '../../../../lib/utils.js';
 
 function classNames(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(' ');
@@ -12,6 +13,15 @@ const stageTone: Record<string, string> = {
   development: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
   uat: 'bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-300',
   delivery: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+};
+
+const statusTone: Record<string, string> = {
+  queued: 'bg-slate-500/10 text-slate-700 dark:text-slate-300',
+  running: 'bg-blue-500/10 text-blue-700 dark:text-blue-300',
+  waiting_confirm: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
+  waiting_feedback: 'bg-violet-500/10 text-violet-700 dark:text-violet-300',
+  failed: 'bg-red-500/10 text-red-700 dark:text-red-300',
+  completed: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
 };
 
 type WorkflowStagePanelProps = {
@@ -57,9 +67,16 @@ function getPrototypeDetails(workflow: SessionWorkflow) {
     return null;
   }
 
+  const previewUrl = typeof workflow.data?.prototype?.previewUrl === 'string'
+    ? workflow.data.prototype.previewUrl.trim()
+    : typeof workflow.data?.publicUrls?.prototypePreview === 'string'
+      ? workflow.data.publicUrls.prototypePreview.trim()
+      : '';
+
   return {
     summary: String(prototype.summary || '').trim(),
     highlights: limitItems(prototype.highlights),
+    previewUrl: resolveAppUrl(previewUrl),
   };
 }
 
@@ -79,7 +96,7 @@ function getDevelopmentDetails(workflow: SessionWorkflow) {
       status: String(item?.status || '').trim(),
       details: String(item?.details || '').trim(),
     })).filter((item: DevelopmentResultItem) => item.name),
-    previewUrl,
+    previewUrl: resolveAppUrl(previewUrl),
   };
 }
 
@@ -146,15 +163,12 @@ export default function WorkflowStagePanel({
           : t('workflowSession.helpers.inspect');
 
   return (
-    <div className="mx-3 mb-3 rounded-2xl border border-border/70 bg-card/90 px-4 py-4 shadow-sm sm:mx-4">
+    <div className="mx-3 mb-3 max-h-[45vh] flex-shrink-0 overflow-y-auto rounded-2xl border border-border/70 bg-card/90 px-4 py-4 shadow-sm sm:mx-4 sm:max-h-[50vh]">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <div className="mb-2 flex flex-wrap items-center gap-2">
+          <div className="mb-2 flex flex-wrap items-center gap-2 pr-2">
             <span className={classNames('rounded-full px-2.5 py-1 text-xs font-medium', stageTone[workflow.stage] || 'bg-muted text-foreground')}>
-              {stageLabel}
-            </span>
-            <span className="rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
-              {statusLabel}
+              {t('workflowSession.currentStage', { defaultValue: '当前阶段' })}: {stageLabel}
             </span>
             <span className="text-xs text-muted-foreground">
               {t('workflowSession.attempt', { count: workflow.stageAttempt })}
@@ -207,6 +221,18 @@ export default function WorkflowStagePanel({
                   items={prototypeDetails.highlights}
                 />
               </div>
+              {prototypeDetails.previewUrl && (
+                <div className="mt-3 text-sm text-foreground">
+                  <a
+                    className="text-blue-600 underline underline-offset-4 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
+                    href={prototypeDetails.previewUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {t('workflowSession.prototypePreview', { defaultValue: '原型预览' })}
+                  </a>
+                </div>
+              )}
             </div>
           )}
 
@@ -239,10 +265,14 @@ export default function WorkflowStagePanel({
               )}
               {developmentDetails.previewUrl && (
                 <div className="mt-3 text-sm text-foreground">
-                  <span className="font-medium">
-                    {t('workflowSession.cards.preview', { defaultValue: '预览' })}
-                  </span>
-                  {`: ${developmentDetails.previewUrl}`}
+                  <a
+                    className="text-blue-600 underline underline-offset-4 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
+                    href={developmentDetails.previewUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {t('workflowSession.uatPreview', { defaultValue: 'UAT 预览' })}
+                  </a>
                 </div>
               )}
             </div>
@@ -253,7 +283,12 @@ export default function WorkflowStagePanel({
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-col items-end gap-2 self-start">
+          <span className={classNames('rounded-full px-2.5 py-1 text-xs font-medium', statusTone[workflow.status] || 'bg-muted text-muted-foreground')}>
+            {statusLabel}
+          </span>
+
+          <div className="flex flex-wrap justify-end gap-2">
           {isWaitingForConfirm && onConfirm && (
             <button
               type="button"
@@ -274,6 +309,7 @@ export default function WorkflowStagePanel({
               {isSubmitting ? t('workflowSession.actions.processing') : t('workflowSession.actions.markDelivered')}
             </button>
           )}
+          </div>
         </div>
       </div>
     </div>

@@ -4,6 +4,12 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import {
+  getConfiguredWorkspacesRoot,
+  getLegacyWorkspaceRootForUserId,
+  getWorkspaceRootForPublicId,
+  normalizeLegacyWorkspacePath,
+} from '../utils/workspace-paths.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -729,6 +735,22 @@ function applyCustomSessionNames(sessions, provider) {
   }
 }
 
+function normalizeProjectPathForUser(userId, projectPath) {
+  if (!projectPath || typeof projectPath !== 'string') {
+    return projectPath;
+  }
+
+  const publicId = userDb.getPublicId(userId);
+  if (!publicId) {
+    return projectPath;
+  }
+
+  const workspacesRoot = getConfiguredWorkspacesRoot();
+  const legacyRoot = getLegacyWorkspaceRootForUserId(userId, workspacesRoot);
+  const workspaceRoot = getWorkspaceRootForPublicId(publicId, workspacesRoot);
+  return normalizeLegacyWorkspacePath(projectPath, legacyRoot, workspaceRoot);
+}
+
 const userProjectsDb = {
   upsertProject: ({ userId, projectName, projectPath, displayName = null, source = 'discovered' }) => {
     db.prepare(
@@ -745,15 +767,27 @@ const userProjectsDb = {
   },
 
   getProject: (userId, projectName) => {
-    return db.prepare(
+    const row = db.prepare(
       'SELECT * FROM user_projects WHERE user_id = ? AND project_name = ?'
-    ).get(userId, projectName) || null;
+    ).get(userId, projectName);
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      ...row,
+      project_path: normalizeProjectPathForUser(userId, row.project_path),
+    };
   },
 
   getProjectsByUser: (userId) => {
     return db.prepare(
       'SELECT * FROM user_projects WHERE user_id = ? ORDER BY datetime(updated_at) DESC, id DESC'
-    ).all(userId);
+    ).all(userId).map((row) => ({
+      ...row,
+      project_path: normalizeProjectPathForUser(userId, row.project_path),
+    }));
   },
 
   countProjectsForUser: (userId) => {
@@ -837,7 +871,7 @@ function hydrateDeliveryWorkflow(row) {
     id: row.id,
     userId: row.user_id,
     projectName: row.project_name,
-    projectPath: row.project_path,
+    projectPath: normalizeProjectPathForUser(row.user_id, row.project_path),
     title: row.title,
     requirementText: row.requirement_text,
     provider: row.provider,

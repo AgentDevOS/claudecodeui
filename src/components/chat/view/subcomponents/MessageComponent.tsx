@@ -152,7 +152,15 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, o
         <div className="w-full">
           <div className="flex items-center gap-2 py-0.5">
             <span className={`inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full ${message.taskStatus === 'completed' ? 'bg-green-400 dark:bg-green-500' : 'bg-amber-400 dark:bg-amber-500'}`} />
-            <span className="text-xs text-gray-500 dark:text-gray-400">{message.content}</span>
+            <span
+              className={`text-xs ${
+                message.taskStatus === 'running'
+                  ? 'font-medium text-foreground'
+                  : 'text-gray-500 dark:text-gray-400'
+              }`}
+            >
+              {message.content}
+            </span>
           </div>
         </div>
       ) : (
@@ -473,4 +481,3 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, o
 });
 
 export default MessageComponent;
-

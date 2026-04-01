@@ -4,6 +4,53 @@ import { IS_PLATFORM } from '../constants/config.js';
 
 // Use env var if set, otherwise auto-generate a unique secret per installation
 const JWT_SECRET = process.env.JWT_SECRET || appConfigDb.getOrCreateJwtSecret();
+const AUTH_COOKIE_NAME = 'ccui_auth_token';
+
+function parseCookieHeader(cookieHeader = '') {
+  return cookieHeader
+    .split(';')
+    .map((segment) => segment.trim())
+    .filter(Boolean)
+    .reduce((cookies, entry) => {
+      const separatorIndex = entry.indexOf('=');
+      if (separatorIndex === -1) {
+        return cookies;
+      }
+
+      const key = entry.slice(0, separatorIndex).trim();
+      const value = entry.slice(separatorIndex + 1).trim();
+      if (!key) {
+        return cookies;
+      }
+
+      cookies[key] = decodeURIComponent(value);
+      return cookies;
+    }, {});
+}
+
+function shouldSetSecureCookie(req) {
+  return req.secure || req.headers['x-forwarded-proto'] === 'https';
+}
+
+function persistAuthCookie(req, res, token) {
+  if (!token || typeof token !== 'string') {
+    return;
+  }
+
+  const cookieParts = [
+    `${AUTH_COOKIE_NAME}=${encodeURIComponent(token)}`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    `Max-Age=${7 * 24 * 60 * 60}`,
+  ];
+
+  if (shouldSetSecureCookie(req)) {
+    cookieParts.push('Secure');
+  }
+
+  res.setHeader('Set-Cookie', cookieParts.join('; '));
+}
 
 // Optional API key middleware
 const validateApiKey = (req, res, next) => {
@@ -38,11 +85,16 @@ const authenticateToken = async (req, res, next) => {
 
   // Normal OSS JWT validation
   const authHeader = req.headers['authorization'];
+  const cookies = parseCookieHeader(req.headers.cookie);
   let token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
   // Also check query param for SSE endpoints (EventSource can't set headers)
   if (!token && req.query.token) {
     token = req.query.token;
+  }
+
+  if (!token && cookies[AUTH_COOKIE_NAME]) {
+    token = cookies[AUTH_COOKIE_NAME];
   }
 
   if (!token) {
@@ -66,6 +118,10 @@ const authenticateToken = async (req, res, next) => {
         const newToken = generateToken(user);
         res.setHeader('X-Refreshed-Token', newToken);
       }
+    }
+
+    if (req.query.token && req.query.token === token && cookies[AUTH_COOKIE_NAME] !== token) {
+      persistAuthCookie(req, res, token);
     }
 
     req.user = user;

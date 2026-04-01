@@ -61,6 +61,7 @@ function workflowRoot(projectPath, workflowId) {
 
 function getWorkflowPaths(workflow) {
   const root = workflowRoot(workflow.projectPath, workflow.id);
+  const prototypeDir = path.join(workflow.projectPath, 'prototype');
 
   return {
     root,
@@ -70,10 +71,9 @@ function getWorkflowPaths(workflow) {
       md: path.join(root, 'requirement', 'requirement.md'),
     },
     prototype: {
-      dir: path.join(root, 'prototype'),
-      appDir: path.join(root, 'prototype', 'app'),
-      json: path.join(root, 'prototype', 'prototype.json'),
-      md: path.join(root, 'prototype', 'prototype.md'),
+      dir: prototypeDir,
+      entryHtml: path.join(prototypeDir, 'index.html'),
+      json: path.join(prototypeDir, 'prototype.json'),
     },
     development: {
       dir: path.join(root, 'development'),
@@ -86,7 +86,7 @@ function getWorkflowPaths(workflow) {
 
 async function ensureWorkflowDirectories(paths) {
   await fs.mkdir(paths.requirement.dir, { recursive: true });
-  await fs.mkdir(paths.prototype.appDir, { recursive: true });
+  await fs.mkdir(paths.prototype.dir, { recursive: true });
   await fs.mkdir(paths.development.dir, { recursive: true });
   await fs.mkdir(paths.development.uatDir, { recursive: true });
 }
@@ -240,11 +240,12 @@ ${revisionSection}
 Create a lightweight browser prototype without modifying the main project source code.
 
 Requirements:
-- Put the prototype app under ${paths.prototype.appDir}
+- Create the prototype as real HTML/CSS/JS files under ${paths.prototype.dir}
+- The main entry file must be ${paths.prototype.entryHtml}
 - It must work when served under the base path /preview/${workflow.id}/prototype/
 - Prefer simple static HTML/CSS/JS with relative asset paths
-- Write a prototype explanation to ${paths.prototype.md}
 - Write valid JSON metadata to ${paths.prototype.json}
+- The primary deliverable is the runnable HTML prototype, not a text summary
 - ${sameLanguageInstruction('the confirmed requirement')}
 
 The JSON file must use this schema:
@@ -268,6 +269,16 @@ ${feedbackItems.map((item, index) => `${index + 1}. ${item.content}`).join('\n')
 `
     : '';
 
+  const sourceDirectoryRules = `
+Source code placement rules for newly generated business code:
+- Mini Program code must go under ${path.join(workflow.projectPath, 'src', 'miniprogram')}
+- Web code must go under ${path.join(workflow.projectPath, 'src', 'web')}
+- App code must go under ${path.join(workflow.projectPath, 'src', 'app')}
+- Backend service code must go under ${path.join(workflow.projectPath, 'src', 'backend')}
+- Admin web code must go under ${path.join(workflow.projectPath, 'src', 'admin')}
+- Do not place newly generated business source files outside those src subdirectories unless it is a minimal integration change to existing infrastructure
+`;
+
   return `
 You are working inside the project at ${workflow.projectPath}.
 
@@ -276,12 +287,13 @@ Confirmed requirement files:
 - ${paths.requirement.json}
 
 Approved prototype files:
-- ${paths.prototype.md}
+- ${paths.prototype.entryHtml}
 - ${paths.prototype.json}
 
 ${feedbackSection}
 
 Implement the requested changes in the main project. Run relevant tests and build commands when possible.
+${sourceDirectoryRules}
 
 The final UAT front-end preview will be served from /preview/${workflow.id}/uat/
 Any local runtime service will be exposed from /runtime/${workflow.id}/
@@ -368,11 +380,10 @@ function buildPrototypeData(workflow, paths, prototypeJson, prototypeMd) {
     prototype: {
       attempt: workflow.stageAttempt,
       generatedAt: new Date().toISOString(),
+      dir: paths.prototype.dir,
+      entryHtmlPath: paths.prototype.entryHtml,
       jsonPath: paths.prototype.json,
-      markdownPath: paths.prototype.md,
-      appDir: paths.prototype.appDir,
       content: prototypeJson,
-      markdown: prototypeMd,
       previewUrl: `/preview/${workflow.id}/prototype/`,
     },
     publicUrls: {
@@ -454,14 +465,14 @@ async function runPrototypeStage(workflow) {
     sessionSummary: getStageSessionName(workflow, 'prototype'),
   }, writer);
 
-  if (!(await exists(paths.prototype.json)) || !(await exists(paths.prototype.md))) {
+  if (!(await exists(paths.prototype.entryHtml)) || !(await exists(paths.prototype.json))) {
     throw new Error(writer.errors.at(-1) || 'Codex did not create prototype artifacts');
   }
 
   const prototypeJson = await readJson(paths.prototype.json);
-  const prototypeMd = await readText(paths.prototype.md);
-  const data = buildPrototypeData(workflow, paths, prototypeJson, prototypeMd);
-  const latestSummary = prototypeJson.summary || prototypeJson.title || excerpt(prototypeMd);
+  const prototypeHtml = await readText(paths.prototype.entryHtml);
+  const data = buildPrototypeData(workflow, paths, prototypeJson, prototypeHtml);
+  const latestSummary = prototypeJson.summary || prototypeJson.title || excerpt(prototypeHtml);
 
   return deliveryWorkflowsDb.updateWorkflow(workflow.id, {
     status: 'waiting_confirm',
@@ -751,6 +762,36 @@ export async function reviseDeliveryWorkflow(workflowId, userId, content) {
   return updated;
 }
 
+export async function retryDeliveryWorkflow(workflowId, userId) {
+  const workflow = deliveryWorkflowsDb.getWorkflowById(workflowId, userId);
+  if (!workflow) {
+    return null;
+  }
+
+  if (workflow.status !== 'failed') {
+    throw new Error('Workflow is not in a failed state');
+  }
+
+  if (!['requirement', 'prototype', 'development'].includes(workflow.stage)) {
+    throw new Error(`Retry is not supported for stage: ${workflow.stage}`);
+  }
+
+  const updated = deliveryWorkflowsDb.updateWorkflow(workflowId, {
+    status: 'running',
+    stageAttempt: workflow.stageAttempt + 1,
+    errorMessage: null,
+  }, userId);
+
+  addWorkflowEvent(updated, workflow.stage, 'stage_retried', `Retried ${workflow.stage} stage`, {
+    retriedStage: workflow.stage,
+    previousError: workflow.errorMessage,
+  });
+  broadcastDeliveryWorkflowUpdate(updated, { eventType: 'stage_retried' });
+  void queueWorkflowStage(workflowId);
+
+  return updated;
+}
+
 export async function completeDeliveryWorkflow(workflowId, userId) {
   const workflow = deliveryWorkflowsDb.getWorkflowById(workflowId, userId);
   if (!workflow) {
@@ -789,7 +830,7 @@ export function getWorkflowPreviewDirectory(workflowId, target) {
   }
 
   if (target === 'prototype') {
-    return workflow.data?.prototype?.appDir || null;
+    return workflow.data?.prototype?.dir || null;
   }
 
   if (target === 'uat') {

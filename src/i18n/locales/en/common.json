@@ -126,6 +126,7 @@
       "stageCompleted": "Completed {{stage}} stage",
       "stageConfirmed": "Confirmed {{stage}} stage",
       "feedbackSubmitted": "Submitted UAT feedback",
+      "stageRetried": "Retried {{stage}} stage",
       "revisionSubmitted": "Submitted {{stage}} revision request",
       "workflowCompleted": "Workflow marked as delivered",
       "stageFailed": "{{stage}} stage failed"
@@ -136,6 +137,7 @@
       "requirementRequired": "Requirement text is required",
       "createWorkflow": "Failed to create workflow",
       "confirmWorkflow": "Failed to confirm workflow",
+      "retryWorkflow": "Failed to retry workflow",
       "submitFeedback": "Failed to submit feedback",
       "completeWorkflow": "Failed to complete workflow"
     },
@@ -156,7 +158,7 @@
     }
   },
   "mainContent": {
-    "loading": "Loading Claude Code UI",
+    "loading": "Loading AISoft",
     "settingUpWorkspace": "Setting up your workspace...",
     "chooseProject": "Choose Your Project",
     "selectProjectDescription": "Select a project from the sidebar to start coding with Claude. Each project contains your chat sessions and file history.",

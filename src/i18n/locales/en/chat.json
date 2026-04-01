@@ -139,6 +139,7 @@
   "workflowSession": {
     "defaultTitle": "Delivery Workflow",
     "noSummary": "This stage is ready.",
+    "currentStage": "Current Stage",
     "attempt": "Attempt {{count}}",
     "actions": {
       "confirm": "Confirm",
@@ -155,7 +156,7 @@
     "progress": {
       "creating": "Preparing the requirement summary.",
       "revisingRequirement": "Updating the requirement summary based on your feedback.",
-      "revisingPrototype": "Updating the prototype notes based on your feedback.",
+      "revisingPrototype": "Updating the prototype HTML based on your feedback.",
       "submittingFeedback": "Applying your feedback and rerunning development checks."
     },
     "placeholders": {

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * Claude Code UI CLI
+ * AISoft CLI
  *
- * Provides command-line utilities for managing Claude Code UI
+ * Provides command-line utilities for managing AISoft
  *
  * Commands:
  *   (no args)     - Start the server (default)
@@ -84,7 +84,7 @@ function getInstallDir() {
 
 // Show status command
 function showStatus() {
-    console.log(`\n${c.bright('Claude Code UI - Status')}\n`);
+    console.log(`\n${c.bright('AISoft - Status')}\n`);
     console.log(c.dim('═'.repeat(60)));
 
     // Version info
@@ -141,7 +141,7 @@ function showStatus() {
 function showHelp() {
     console.log(`
 ╔═══════════════════════════════════════════════════════════════╗
-║              Claude Code UI - Command Line Tool               ║
+║                    AISoft Command Line Tool                    ║
 ╚═══════════════════════════════════════════════════════════════╝
 
 Usage:
@@ -149,7 +149,7 @@ Usage:
   cloudcli [command] [options]
 
 Commands:
-  start          Start the Claude Code UI server (default)
+  start          Start the AISoft server (default)
   status         Show configuration and data locations
   update         Update to the latest version
   help           Show this help information
@@ -176,10 +176,10 @@ Environment Variables:
   CONTEXT_WINDOW      Set context window size (default: 160000)
 
 Documentation:
-  ${packageJson.homepage || 'https://github.com/siteboon/claudecodeui'}
+  ${packageJson.homepage || 'https://auto.huibanxue.com/aisoft/ui/'}
 
 Report Issues:
-  ${packageJson.bugs?.url || 'https://github.com/siteboon/claudecodeui/issues'}
+  ${packageJson.bugs?.url || 'https://auto.huibanxue.com/aisoft/ui/'}
 `);
 }
 

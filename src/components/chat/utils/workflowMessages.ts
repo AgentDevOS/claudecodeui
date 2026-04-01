@@ -1,5 +1,6 @@
 import type { ChatMessage } from '../types/types';
 import type { SessionWorkflow, WorkflowFeedbackItem } from '../hooks/useWorkflowSessionState';
+import { resolveAppUrl } from '../../../lib/utils.js';
 
 type WorkflowCopy = {
   created: string;
@@ -51,19 +52,19 @@ function getCopy(locale?: string): WorkflowCopy {
       created: '已创建交付流程，正在整理需求。',
       runningRequirement: '正在整理需求，请稍候。',
       runningRequirementRevision: '正在根据你的反馈更新需求，请稍候。',
-      runningPrototype: '正在生成原型说明，请稍候。',
-      runningPrototypeRevision: '正在根据你的反馈更新原型，请稍候。',
+      runningPrototype: '正在生成原型 HTML，请稍候。',
+      runningPrototypeRevision: '正在根据你的反馈更新原型 HTML，请稍候。',
       runningDevelopment: '正在开发并执行测试，请稍候。',
       runningDevelopmentFeedback: '正在根据你的验收反馈继续修复并执行测试，请稍候。',
       deliveryCompleted: '已标记为最终交付。',
       requirementReady: '需求要点已整理，请确认。',
       requirementUpdated: '已根据你的反馈更新需求，请确认。',
-      prototypeReady: '原型说明已生成，请确认是否进入开发。',
-      prototypeUpdated: '已根据你的反馈更新原型，请确认是否进入开发。',
+      prototypeReady: '原型 HTML 已生成，请确认是否进入开发。',
+      prototypeUpdated: '已根据你的反馈更新原型 HTML，请确认是否进入开发。',
       developmentReady: '开发与测试结果已生成，请查看并继续验收。',
       developmentUpdated: '已根据你的反馈完成修复，并更新了开发与测试结果。',
       requirementCardHint: '请查看上方需求概要卡片；如无问题，点击确认继续。',
-      prototypeCardHint: '请查看上方原型概要卡片；如无问题，点击确认继续。',
+      prototypeCardHint: '请查看上方原型卡片和预览入口；如无问题，点击确认继续。',
       developmentCardHint: '请查看上方交付概要卡片，并继续验收。',
       currentFeedback: '本轮反馈',
       summary: '概述',
@@ -89,19 +90,19 @@ function getCopy(locale?: string): WorkflowCopy {
     created: 'Delivery workflow created. Preparing the requirement summary.',
     runningRequirement: 'Preparing the requirement summary.',
     runningRequirementRevision: 'Updating the requirement summary based on your feedback.',
-    runningPrototype: 'Preparing the prototype notes.',
-    runningPrototypeRevision: 'Updating the prototype notes based on your feedback.',
+    runningPrototype: 'Preparing the prototype HTML.',
+    runningPrototypeRevision: 'Updating the prototype HTML based on your feedback.',
     runningDevelopment: 'Implementing the requested changes and running tests.',
     runningDevelopmentFeedback: 'Applying your UAT feedback and rerunning verification.',
     deliveryCompleted: 'This workflow has been marked as delivered.',
     requirementReady: 'Requirement summary is ready for confirmation.',
     requirementUpdated: 'Requirement summary has been updated based on your feedback.',
-    prototypeReady: 'Prototype notes are ready for confirmation.',
-    prototypeUpdated: 'Prototype notes have been updated based on your feedback.',
+    prototypeReady: 'Prototype HTML is ready for confirmation.',
+    prototypeUpdated: 'Prototype HTML has been updated based on your feedback.',
     developmentReady: 'Development and test results are ready for review.',
     developmentUpdated: 'Development and test results have been updated based on your feedback.',
     requirementCardHint: 'Review the requirement summary card above, then confirm or send revisions.',
-    prototypeCardHint: 'Review the prototype summary card above, then confirm or send revisions.',
+    prototypeCardHint: 'Review the prototype card and preview link above, then confirm or send revisions.',
     developmentCardHint: 'Review the delivery summary card above and continue with UAT.',
     currentFeedback: 'Feedback applied in this round',
     summary: 'Summary',
@@ -208,9 +209,17 @@ function formatPrototypeMessage(
     workflow.data?.prototype?.attempt,
   );
 
+  const prototypePreviewUrl = typeof workflow.data?.prototype?.previewUrl === 'string'
+    ? workflow.data.prototype.previewUrl.trim()
+    : typeof workflow.data?.publicUrls?.prototypePreview === 'string'
+      ? workflow.data.publicUrls.prototypePreview.trim()
+      : '';
+  const resolvedPrototypePreviewUrl = resolveAppUrl(prototypePreviewUrl);
+
   const parts = [
     `**${feedbackItems.length ? copy.prototypeUpdated : copy.prototypeReady}**`,
     formatStageFeedback(copy, feedbackItems),
+    resolvedPrototypePreviewUrl ? `[${copy.prototypePreview}](${resolvedPrototypePreviewUrl})` : '',
     copy.prototypeCardHint,
   ].filter(Boolean);
 

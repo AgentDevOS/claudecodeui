@@ -141,6 +141,7 @@
   "workflowSession": {
     "defaultTitle": "交付工作流",
     "noSummary": "当前阶段已准备就绪。",
+    "currentStage": "当前阶段",
     "attempt": "第 {{count}} 轮",
     "actions": {
       "confirm": "确认",
@@ -157,12 +158,12 @@
     "progress": {
       "creating": "正在整理需求，请稍候。",
       "revisingRequirement": "正在根据你的反馈更新需求，请稍候。",
-      "revisingPrototype": "正在根据你的反馈更新原型，请稍候。",
+      "revisingPrototype": "正在根据你的反馈更新原型 HTML，请稍候。",
       "submittingFeedback": "正在根据你的反馈继续开发并测试，请稍候。"
     },
     "placeholders": {
       "requirement": "补充需求修改意见。发送后会重新生成需求阶段输出。",
-      "prototype": "补充原型修改意见。发送后会重新生成原型阶段输出。",
+      "prototype": "补充原型修改意见。发送后会重新生成 `prototype/` 下的原型 HTML。",
       "uat": "描述 UAT 中发现的问题、要调整的地方或后续需求。"
     },
     "stages": {
