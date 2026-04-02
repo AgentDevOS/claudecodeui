@@ -81,8 +81,8 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ summary, provider }),
     }),
-  deleteCodexSession: (sessionId) =>
-    authenticatedFetch(`/api/codex/sessions/${sessionId}`, {
+  deleteCodexSession: (sessionId, projectName) =>
+    authenticatedFetch(`/api/codex/sessions/${sessionId}?projectName=${encodeURIComponent(projectName)}`, {
       method: 'DELETE',
     }),
   deleteGeminiSession: (sessionId) =>

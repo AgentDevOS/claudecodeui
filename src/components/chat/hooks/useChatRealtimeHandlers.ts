@@ -240,6 +240,9 @@ export function useChatRealtimeHandlers({
           );
         }
         onNavigateToSession?.(newSessionId);
+        if (window.refreshProjects) {
+          setTimeout(() => window.refreshProjects?.(), 200);
+        }
         break;
       }
 

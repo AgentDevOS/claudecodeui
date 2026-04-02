@@ -419,7 +419,7 @@ export function useSidebarController({
     try {
       let response;
       if (provider === 'codex') {
-        response = await api.deleteCodexSession(sessionId);
+        response = await api.deleteCodexSession(sessionId, projectName);
       } else if (provider === 'gemini') {
         response = await api.deleteGeminiSession(sessionId);
       } else {

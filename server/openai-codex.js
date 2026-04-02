@@ -17,6 +17,7 @@ import { Codex } from '@openai/codex-sdk';
 import { notifyRunFailed, notifyRunStopped } from './services/notification-orchestrator.js';
 import { codexAdapter } from './providers/codex/adapter.js';
 import { createNormalizedMessage } from './providers/types.js';
+import { appendCodexMessage } from './codex-project-storage.js';
 
 // Track active sessions
 const activeCodexSessions = new Map();
@@ -300,6 +301,41 @@ export async function queryCodex(command, options = {}, ws) {
   let eventCount = 0;
   let streamedTextEvents = 0;
   let streamedTextChars = 0;
+  const pendingPersistence = [];
+  let persistedUserPrompt = false;
+
+  const hasRealSessionId = () =>
+    Boolean(currentSessionId && !String(currentSessionId).startsWith('new-session-codex-'));
+
+  const persistCodexMessage = async (message) => {
+    if (!projectPath || !message) {
+      return;
+    }
+
+    if (!hasRealSessionId()) {
+      pendingPersistence.push(message);
+      return;
+    }
+
+    await appendCodexMessage(projectPath, {
+      ...message,
+      sessionId: currentSessionId,
+    });
+  };
+
+  const flushPendingPersistence = async () => {
+    if (!projectPath || !hasRealSessionId() || pendingPersistence.length === 0) {
+      return;
+    }
+
+    while (pendingPersistence.length > 0) {
+      const message = pendingPersistence.shift();
+      await appendCodexMessage(projectPath, {
+        ...message,
+        sessionId: currentSessionId,
+      });
+    }
+  };
 
   try {
     // Initialize Codex SDK
@@ -343,6 +379,17 @@ export async function queryCodex(command, options = {}, ws) {
         provider: 'codex',
       }));
       emittedSessionCreated = true;
+      if (command?.trim()) {
+        await persistCodexMessage(createNormalizedMessage({
+          id: `codex_user_${currentSessionId}_${Date.now()}`,
+          kind: 'text',
+          role: 'user',
+          content: command.trim(),
+          sessionId: currentSessionId,
+          provider: 'codex',
+        }));
+        persistedUserPrompt = true;
+      }
     }
 
     // Execute with streaming
@@ -365,6 +412,7 @@ export async function queryCodex(command, options = {}, ws) {
         const actualSessionId = event.thread_id;
         moveActiveSession(currentSessionId, actualSessionId);
         currentSessionId = actualSessionId;
+        await flushPendingPersistence();
 
         if (!emittedSessionCreated) {
           sendMessage(ws, createNormalizedMessage({
@@ -374,6 +422,18 @@ export async function queryCodex(command, options = {}, ws) {
             provider: 'codex',
           }));
           emittedSessionCreated = true;
+        }
+
+        if (command?.trim() && pendingPersistence.length === 0 && !persistedUserPrompt) {
+          await persistCodexMessage(createNormalizedMessage({
+            id: `codex_user_${currentSessionId}_${Date.now()}`,
+            kind: 'text',
+            role: 'user',
+            content: command.trim(),
+            sessionId: currentSessionId,
+            provider: 'codex',
+          }));
+          persistedUserPrompt = true;
         }
         continue;
       }
@@ -422,6 +482,17 @@ export async function queryCodex(command, options = {}, ws) {
             sessionId: currentSessionId,
             provider: 'codex',
           }));
+          if (nextText.trim()) {
+            await persistCodexMessage(createNormalizedMessage({
+              id: `codex_agent_${event.item.id}`,
+              kind: 'text',
+              role: 'assistant',
+              content: nextText,
+              sessionId: currentSessionId,
+              provider: 'codex',
+              timestamp: new Date().toISOString(),
+            }));
+          }
           streamedAgentTexts.delete(event.item.id);
           continue;
         }
@@ -437,6 +508,7 @@ export async function queryCodex(command, options = {}, ws) {
       const normalizedMsgs = codexAdapter.normalizeMessage(transformed, currentSessionId);
       for (const msg of normalizedMsgs) {
         sendMessage(ws, msg);
+        await persistCodexMessage(msg);
       }
 
       if (event.type === 'turn.failed' && !terminalFailure) {
@@ -453,7 +525,9 @@ export async function queryCodex(command, options = {}, ws) {
       // Extract and send token usage if available (normalized to match Claude format)
       if (event.type === 'turn.completed' && event.usage) {
         const totalTokens = (event.usage.input_tokens || 0) + (event.usage.output_tokens || 0);
-        sendMessage(ws, createNormalizedMessage({ kind: 'status', text: 'token_budget', tokenBudget: { used: totalTokens, total: 200000 }, sessionId: currentSessionId, provider: 'codex' }));
+        const tokenBudgetMessage = createNormalizedMessage({ kind: 'status', text: 'token_budget', tokenBudget: { used: totalTokens, total: 200000 }, sessionId: currentSessionId, provider: 'codex' });
+        sendMessage(ws, tokenBudgetMessage);
+        await persistCodexMessage(tokenBudgetMessage);
       }
     }
 
@@ -509,6 +583,12 @@ export async function queryCodex(command, options = {}, ws) {
         sessionId: currentSessionId,
         provider: 'codex',
         timing: timingSnapshot,
+      }));
+      await persistCodexMessage(createNormalizedMessage({
+        kind: 'error',
+        content: error.message,
+        sessionId: currentSessionId,
+        provider: 'codex',
       }));
       if (!terminalFailure) {
         notifyRunFailed({

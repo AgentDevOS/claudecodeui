@@ -83,7 +83,7 @@
  *   Provider implementations:
  *   - Claude: reads ~/.claude/projects/{projectName}/*.jsonl
  *   - Cursor: reads from SQLite store.db (via normalizeCursorBlobs helper)
- *   - Codex:  reads ~/.codex/sessions/*.jsonl
+ *   - Codex:  reads <project>/.aisoft/sessions/codex/*.jsonl
  *   - Gemini: reads from in-memory sessionManager or ~/.gemini/tmp/ JSON files
  *
  * @property {(raw: any, sessionId: string) => NormalizedMessage[]} normalizeMessage

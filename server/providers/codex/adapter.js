@@ -210,11 +210,15 @@ export const codexAdapter = {
    * Fetch session history from Codex JSONL files.
    */
   async fetchHistory(sessionId, opts = {}) {
-    const { limit = null, offset = 0 } = opts;
+    const { projectPath = '', limit = null, offset = 0 } = opts;
+
+    if (!projectPath) {
+      return { messages: [], total: 0, hasMore: false, offset: 0, limit: null };
+    }
 
     let result;
     try {
-      result = await getCodexSessionMessages(sessionId, limit, offset);
+      result = await getCodexSessionMessages(sessionId, projectPath, limit, offset);
     } catch (error) {
       console.warn(`[CodexAdapter] Failed to load session ${sessionId}:`, error.message);
       return { messages: [], total: 0, hasMore: false, offset: 0, limit: null };

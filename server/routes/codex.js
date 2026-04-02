@@ -4,7 +4,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
 import TOML from '@iarna/toml';
-import { getCodexSessions, deleteCodexSession } from '../projects.js';
+import { getCodexSessions, deleteCodexSession, extractProjectDirectory } from '../projects.js';
 import { applyCustomSessionNames, sessionNamesDb } from '../database/db.js';
 
 const router = express.Router();
@@ -71,7 +71,13 @@ router.get('/sessions', async (req, res) => {
 router.delete('/sessions/:sessionId', async (req, res) => {
   try {
     const { sessionId } = req.params;
-    await deleteCodexSession(sessionId);
+    const { projectName = '' } = req.query;
+    if (!projectName) {
+      return res.status(400).json({ success: false, error: 'projectName query parameter required' });
+    }
+
+    const projectPath = await extractProjectDirectory(projectName, req.user?.id ?? null);
+    await deleteCodexSession(projectPath, sessionId);
     sessionNamesDb.deleteName(sessionId, 'codex');
     res.json({ success: true });
   } catch (error) {

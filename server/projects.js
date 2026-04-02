@@ -65,6 +65,12 @@ import crypto from 'crypto';
 import os from 'os';
 import sessionManager from './sessionManager.js';
 import { applyCustomSessionNames, userProjectsDb } from './database/db.js';
+import {
+  deleteCodexSessionFile,
+  getCodexSessionHistory,
+  listCodexSessions as listProjectCodexSessions,
+  searchCodexProjectSessions,
+} from './codex-project-storage.js';
 
 let sqliteModulesPromise = null;
 
@@ -1214,7 +1220,7 @@ async function deleteProject(projectName, force = false, userId = null) {
         const codexSessions = await getCodexSessions(projectPath, { limit: 0 });
         for (const session of codexSessions) {
           try {
-            await deleteCodexSession(session.id);
+            await deleteCodexSession(projectPath, session.id);
           } catch (err) {
             console.warn(`Failed to delete Codex session ${session.id}:`, err.message);
           }
@@ -1438,535 +1444,43 @@ function normalizeComparablePath(inputPath) {
   return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
 }
 
-const CODEX_JSONL_FILE_INDEX_TTL_MS = 15_000;
-let codexJsonlFileIndexCache = [];
-let codexJsonlFileIndexBuiltAt = 0;
-const codexSessionFilePathCache = new Map();
-
-async function findCodexJsonlFiles(dir) {
-  const files = [];
-
-  try {
-    const entries = await fs.readdir(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        files.push(...await findCodexJsonlFiles(fullPath));
-      } else if (entry.name.endsWith('.jsonl')) {
-        files.push(fullPath);
-      }
-    }
-  } catch (error) {
-    // Skip directories we can't read
-  }
-
-  return files;
-}
-
-function invalidateCodexSessionFileCaches(sessionId = null, filePath = null) {
-  codexJsonlFileIndexCache = [];
-  codexJsonlFileIndexBuiltAt = 0;
-
-  if (sessionId) {
-    codexSessionFilePathCache.delete(sessionId);
-  }
-
-  if (filePath) {
-    for (const [cachedSessionId, cachedFilePath] of codexSessionFilePathCache.entries()) {
-      if (cachedFilePath === filePath) {
-        codexSessionFilePathCache.delete(cachedSessionId);
-      }
-    }
-  }
-}
-
-async function getCachedCodexJsonlFiles(codexSessionsDir) {
-  const now = Date.now();
-
-  if (
-    codexJsonlFileIndexCache.length > 0 &&
-    now - codexJsonlFileIndexBuiltAt < CODEX_JSONL_FILE_INDEX_TTL_MS
-  ) {
-    return codexJsonlFileIndexCache;
-  }
-
-  codexJsonlFileIndexCache = await findCodexJsonlFiles(codexSessionsDir);
-  codexJsonlFileIndexBuiltAt = now;
-  return codexJsonlFileIndexCache;
-}
-
-async function findCachedCodexSessionFilePath(sessionId) {
-  const cachedPath = codexSessionFilePathCache.get(sessionId);
-  if (cachedPath) {
-    try {
-      await fs.access(cachedPath);
-      return cachedPath;
-    } catch {
-      codexSessionFilePathCache.delete(sessionId);
-    }
-  }
-
-  const codexSessionsDir = path.join(os.homedir(), '.codex', 'sessions');
-  const jsonlFiles = await getCachedCodexJsonlFiles(codexSessionsDir);
-  const matchedFilePath = jsonlFiles.find((filePath) => path.basename(filePath).includes(sessionId)) || null;
-
-  if (matchedFilePath) {
-    codexSessionFilePathCache.set(sessionId, matchedFilePath);
-  }
-
-  return matchedFilePath;
-}
-
-async function buildCodexSessionsIndex() {
-  const codexSessionsDir = path.join(os.homedir(), '.codex', 'sessions');
-  const sessionsByProject = new Map();
-
-  try {
-    await fs.access(codexSessionsDir);
-  } catch (error) {
-    return sessionsByProject;
-  }
-
-  const jsonlFiles = await getCachedCodexJsonlFiles(codexSessionsDir);
-
-  for (const filePath of jsonlFiles) {
-    try {
-      const sessionData = await parseCodexSessionFile(filePath);
-      if (!sessionData || !sessionData.id) {
-        continue;
-      }
-
-      codexSessionFilePathCache.set(sessionData.id, filePath);
-
-      const normalizedProjectPath = normalizeComparablePath(sessionData.cwd);
-      if (!normalizedProjectPath) {
-        continue;
-      }
-
-      const session = {
-        id: sessionData.id,
-        summary: sessionData.summary || 'Codex Session',
-        messageCount: sessionData.messageCount || 0,
-        lastActivity: sessionData.timestamp ? new Date(sessionData.timestamp) : new Date(),
-        cwd: sessionData.cwd,
-        model: sessionData.model,
-        filePath,
-        provider: 'codex',
-      };
-
-      if (!sessionsByProject.has(normalizedProjectPath)) {
-        sessionsByProject.set(normalizedProjectPath, []);
-      }
-
-      sessionsByProject.get(normalizedProjectPath).push(session);
-    } catch (error) {
-      console.warn(`Could not parse Codex session file ${filePath}:`, error.message);
-    }
-  }
-
-  for (const sessions of sessionsByProject.values()) {
-    sessions.sort((a, b) => new Date(b.lastActivity) - new Date(a.lastActivity));
-  }
-
-  return sessionsByProject;
-}
-
 // Fetch Codex sessions for a given project path
 async function getCodexSessions(projectPath, options = {}) {
-  const { limit = 5, indexRef = null } = options;
+  const { limit = 5 } = options;
   try {
     const normalizedProjectPath = normalizeComparablePath(projectPath);
     if (!normalizedProjectPath) {
       return [];
     }
-
-    if (indexRef && !indexRef.sessionsByProject) {
-      indexRef.sessionsByProject = await buildCodexSessionsIndex();
-    }
-
-    const sessionsByProject = indexRef?.sessionsByProject || await buildCodexSessionsIndex();
-    const sessions = sessionsByProject.get(normalizedProjectPath) || [];
-
-    // Return limited sessions for performance (0 = unlimited for deletion)
-    return limit > 0 ? sessions.slice(0, limit) : [...sessions];
-
+    return await listProjectCodexSessions(projectPath, { limit });
   } catch (error) {
     console.error('Error fetching Codex sessions:', error);
     return [];
   }
 }
 
-function isVisibleCodexUserMessage(payload) {
-  if (!payload || payload.type !== 'user_message') {
-    return false;
-  }
-
-  // Codex logs internal context (environment, instructions) as non-plain user_message kinds.
-  if (payload.kind && payload.kind !== 'plain') {
-    return false;
-  }
-
-  if (typeof payload.message !== 'string' || payload.message.trim().length === 0) {
-    return false;
-  }
-  
-  return true;
-}
-
-function isHiddenCodexAssistantMessage(payload) {
-  if (!payload || payload.type !== 'message' || payload.role !== 'assistant') {
-    return false;
-  }
-
-  return payload.phase === 'commentary';
-}
-
-function isHiddenCodexToolResult(payload) {
-  if (!payload || payload.type !== 'function_call_output') {
-    return false;
-  }
-
-  const output = typeof payload.output === 'string' ? payload.output.trim() : '';
-  if (!output) {
-    return false;
-  }
-
-  if (output === 'Plan updated') {
-    return true;
-  }
-
-  return false;
-}
-
-// Parse a Codex session JSONL file to extract metadata
-async function parseCodexSessionFile(filePath) {
-  try {
-    const fileStream = fsSync.createReadStream(filePath);
-    const rl = readline.createInterface({
-      input: fileStream,
-      crlfDelay: Infinity
-    });
-
-    let sessionMeta = null;
-    let lastTimestamp = null;
-    let lastUserMessage = null;
-    let messageCount = 0;
-
-    for await (const line of rl) {
-      if (line.trim()) {
-        try {
-          const entry = JSON.parse(line);
-
-          // Track timestamp
-          if (entry.timestamp) {
-            lastTimestamp = entry.timestamp;
-          }
-
-          // Extract session metadata
-          if (entry.type === 'session_meta' && entry.payload) {
-            sessionMeta = {
-              id: entry.payload.id,
-              cwd: entry.payload.cwd,
-              model: entry.payload.model || entry.payload.model_provider,
-              timestamp: entry.timestamp,
-              git: entry.payload.git
-            };
-          }
-
-          // Count visible user messages and extract summary from the latest plain user input.
-          if (entry.type === 'event_msg' && isVisibleCodexUserMessage(entry.payload)) {
-            messageCount++;
-            if (entry.payload.message) {
-              lastUserMessage = entry.payload.message;
-            }
-          }
-
-          if (
-            entry.type === 'response_item'
-            && entry.payload?.type === 'message'
-            && entry.payload.role === 'assistant'
-            && !isHiddenCodexAssistantMessage(entry.payload)
-          ) {
-            messageCount++;
-          }
-
-        } catch (parseError) {
-          // Skip malformed lines
-        }
-      }
-    }
-
-    if (sessionMeta) {
-      return {
-        ...sessionMeta,
-        timestamp: lastTimestamp || sessionMeta.timestamp,
-        summary: lastUserMessage ?
-          (lastUserMessage.length > 50 ? lastUserMessage.substring(0, 50) + '...' : lastUserMessage) :
-          'Codex Session',
-        messageCount
-      };
-    }
-
-    return null;
-
-  } catch (error) {
-    console.error('Error parsing Codex session file:', error);
-    return null;
-  }
-}
-
 // Get messages for a specific Codex session
-async function getCodexSessionMessages(sessionId, limit = null, offset = 0) {
+async function getCodexSessionMessages(sessionId, projectPath, limit = null, offset = 0) {
   try {
-    const sessionFilePath = await findCachedCodexSessionFilePath(sessionId);
-
-    if (!sessionFilePath) {
-      console.warn(`Codex session file not found for session ${sessionId}`);
+    if (!projectPath) {
+      console.warn(`Codex project path missing for session ${sessionId}`);
       return { messages: [], total: 0, hasMore: false };
     }
-
-    const messages = [];
-    let tokenUsage = null;
-    const fileStream = fsSync.createReadStream(sessionFilePath);
-    const rl = readline.createInterface({
-      input: fileStream,
-      crlfDelay: Infinity
-    });
-
-    // Helper to extract text from Codex content array
-    const extractText = (content) => {
-      if (!Array.isArray(content)) return content;
-      return content
-        .map(item => {
-          if (item.type === 'input_text' || item.type === 'output_text') {
-            return item.text;
-          }
-          if (item.type === 'text') {
-            return item.text;
-          }
-          return '';
-        })
-        .filter(Boolean)
-        .join('\n');
-    };
-
-    for await (const line of rl) {
-      if (line.trim()) {
-        try {
-          const entry = JSON.parse(line);
-
-          // Extract token usage from token_count events (keep latest)
-          if (entry.type === 'event_msg' && entry.payload?.type === 'token_count' && entry.payload?.info) {
-            const info = entry.payload.info;
-            if (info.total_token_usage) {
-              tokenUsage = {
-                used: info.total_token_usage.total_tokens || 0,
-                total: info.model_context_window || 200000
-              };
-            }
-          }
-          
-          // Use event_msg.user_message for user-visible inputs.
-          if (entry.type === 'event_msg' && isVisibleCodexUserMessage(entry.payload)) {
-            messages.push({
-              type: 'user',
-              timestamp: entry.timestamp,
-              message: {
-                role: 'user',
-                content: entry.payload.message
-              }
-            });
-          }
-
-          // response_item.message may include internal prompts for non-assistant roles.
-          // Keep only assistant output from response_item.
-          if (
-            entry.type === 'response_item' &&
-            entry.payload?.type === 'message' &&
-            entry.payload.role === 'assistant' &&
-            !isHiddenCodexAssistantMessage(entry.payload)
-          ) {
-            const content = entry.payload.content;
-            const textContent = extractText(content);
-
-            // Only add if there's actual content
-            if (textContent?.trim()) {
-              messages.push({
-                type: 'assistant',
-                timestamp: entry.timestamp,
-                message: {
-                  role: 'assistant',
-                  content: textContent
-                }
-              });
-            }
-          }
-
-          if (entry.type === 'response_item' && entry.payload?.type === 'reasoning') {
-            const summaryText = entry.payload.summary
-              ?.map(s => s.text)
-              .filter(Boolean)
-              .join('\n');
-            if (summaryText?.trim()) {
-              messages.push({
-                type: 'thinking',
-                timestamp: entry.timestamp,
-                message: {
-                  role: 'assistant',
-                  content: summaryText
-                }
-              });
-            }
-          }
-
-          if (entry.type === 'response_item' && entry.payload?.type === 'function_call') {
-            let toolName = entry.payload.name;
-            let toolInput = entry.payload.arguments;
-
-            // Map Codex tool names to Claude equivalents
-            if (toolName === 'shell_command') {
-              toolName = 'Bash';
-              try {
-                const args = JSON.parse(entry.payload.arguments);
-                toolInput = JSON.stringify({ command: args.command });
-              } catch (e) {
-                // Keep original if parsing fails
-              }
-            }
-
-            messages.push({
-              type: 'tool_use',
-              timestamp: entry.timestamp,
-              toolName: toolName,
-              toolInput: toolInput,
-              toolCallId: entry.payload.call_id
-            });
-          }
-
-          if (entry.type === 'response_item' && entry.payload?.type === 'function_call_output') {
-            if (isHiddenCodexToolResult(entry.payload)) {
-              continue;
-            }
-
-            messages.push({
-              type: 'tool_result',
-              timestamp: entry.timestamp,
-              toolCallId: entry.payload.call_id,
-              output: entry.payload.output
-            });
-          }
-
-          if (entry.type === 'response_item' && entry.payload?.type === 'custom_tool_call') {
-            const toolName = entry.payload.name || 'custom_tool';
-            const input = entry.payload.input || '';
-
-            if (toolName === 'apply_patch') {
-              // Parse Codex patch format and convert to Claude Edit format
-              const fileMatch = input.match(/\*\*\* Update File: (.+)/);
-              const filePath = fileMatch ? fileMatch[1].trim() : 'unknown';
-
-              // Extract old and new content from patch
-              const lines = input.split('\n');
-              const oldLines = [];
-              const newLines = [];
-
-              for (const line of lines) {
-                if (line.startsWith('-') && !line.startsWith('---')) {
-                  oldLines.push(line.substring(1));
-                } else if (line.startsWith('+') && !line.startsWith('+++')) {
-                  newLines.push(line.substring(1));
-                }
-              }
-
-              messages.push({
-                type: 'tool_use',
-                timestamp: entry.timestamp,
-                toolName: 'Edit',
-                toolInput: JSON.stringify({
-                  file_path: filePath,
-                  old_string: oldLines.join('\n'),
-                  new_string: newLines.join('\n')
-                }),
-                toolCallId: entry.payload.call_id
-              });
-            } else {
-              messages.push({
-                type: 'tool_use',
-                timestamp: entry.timestamp,
-                toolName: toolName,
-                toolInput: input,
-                toolCallId: entry.payload.call_id
-              });
-            }
-          }
-
-          if (entry.type === 'response_item' && entry.payload?.type === 'custom_tool_call_output') {
-            messages.push({
-              type: 'tool_result',
-              timestamp: entry.timestamp,
-              toolCallId: entry.payload.call_id,
-              output: entry.payload.output || ''
-            });
-          }
-
-        } catch (parseError) {
-          // Skip malformed lines
-        }
-      }
-    }
-
-    // Sort by timestamp
-    messages.sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
-
-    const total = messages.length;
-
-    // Apply pagination if limit is specified
-    if (limit !== null) {
-      const startIndex = Math.max(0, total - offset - limit);
-      const endIndex = total - offset;
-      const paginatedMessages = messages.slice(startIndex, endIndex);
-      const hasMore = startIndex > 0;
-
-      return {
-        messages: paginatedMessages,
-        total,
-        hasMore,
-        offset,
-        limit,
-        tokenUsage
-      };
-    }
-
-    return { messages, tokenUsage };
-
+    return await getCodexSessionHistory(projectPath, sessionId, limit, offset);
   } catch (error) {
     console.error(`Error reading Codex session messages for ${sessionId}:`, error);
     return { messages: [], total: 0, hasMore: false };
   }
 }
 
-async function deleteCodexSession(sessionId) {
+async function deleteCodexSession(projectPath, sessionId) {
   try {
-    const cachedFilePath = await findCachedCodexSessionFilePath(sessionId);
-    if (cachedFilePath) {
-      await fs.unlink(cachedFilePath);
-      invalidateCodexSessionFileCaches(sessionId, cachedFilePath);
-      return true;
+    if (!projectPath) {
+      throw new Error(`Project path is required to delete Codex session ${sessionId}`);
     }
 
-    const codexSessionsDir = path.join(os.homedir(), '.codex', 'sessions');
-    const jsonlFiles = await getCachedCodexJsonlFiles(codexSessionsDir);
-
-    for (const filePath of jsonlFiles) {
-      const sessionData = await parseCodexSessionFile(filePath);
-      if (sessionData && sessionData.id === sessionId) {
-        await fs.unlink(filePath);
-        invalidateCodexSessionFileCaches(sessionId, filePath);
-        return true;
-      }
-    }
-
-    throw new Error(`Codex session file not found for session ${sessionId}`);
+    await deleteCodexSessionFile(projectPath, sessionId);
+    return true;
   } catch (error) {
     console.error(`Error deleting Codex session ${sessionId}:`, error);
     throw error;
@@ -2247,104 +1761,17 @@ async function searchCodexSessionsForProject(
   projectPath, projectResult, words, allWordsMatch, extractText, isSystemMessage,
   buildSnippet, limit, getTotalMatches, addMatches, isAborted
 ) {
-  const normalizedProjectPath = normalizeComparablePath(projectPath);
-  if (!normalizedProjectPath) return;
-  const codexSessionsDir = path.join(os.homedir(), '.codex', 'sessions');
-  try {
-    await fs.access(codexSessionsDir);
-  } catch {
-    return;
-  }
+  const matches = await searchCodexProjectSessions(projectPath, {
+    allWordsMatch,
+    buildSnippet,
+    limit,
+    getTotalMatches,
+    addMatches,
+    isAborted,
+  });
 
-  const jsonlFiles = await findCodexJsonlFiles(codexSessionsDir);
-
-  for (const filePath of jsonlFiles) {
-    if (getTotalMatches() >= limit || isAborted()) break;
-
-    try {
-      const fileStream = fsSync.createReadStream(filePath);
-      const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
-
-      // First pass: read session_meta to check project path match
-      let sessionMeta = null;
-      for await (const line of rl) {
-        if (!line.trim()) continue;
-        try {
-          const entry = JSON.parse(line);
-          if (entry.type === 'session_meta' && entry.payload) {
-            sessionMeta = entry.payload;
-            break;
-          }
-        } catch { continue; }
-      }
-
-      // Skip sessions that don't belong to this project
-      if (!sessionMeta) continue;
-      const sessionProjectPath = normalizeComparablePath(sessionMeta.cwd);
-      if (sessionProjectPath !== normalizedProjectPath) continue;
-
-      // Second pass: re-read file to find matching messages
-      const fileStream2 = fsSync.createReadStream(filePath);
-      const rl2 = readline.createInterface({ input: fileStream2, crlfDelay: Infinity });
-      let lastUserMessage = null;
-      const matches = [];
-
-      for await (const line of rl2) {
-        if (getTotalMatches() >= limit || isAborted()) break;
-        if (!line.trim()) continue;
-
-        let entry;
-        try { entry = JSON.parse(line); } catch { continue; }
-
-        let text = null;
-        let role = null;
-
-        if (entry.type === 'event_msg' && entry.payload?.type === 'user_message' && entry.payload.message) {
-          text = entry.payload.message;
-          role = 'user';
-          lastUserMessage = text;
-        } else if (entry.type === 'response_item' && entry.payload?.type === 'message') {
-          const contentParts = entry.payload.content || [];
-          if (entry.payload.role === 'user') {
-            text = contentParts
-              .filter(p => p.type === 'input_text' && p.text)
-              .map(p => p.text)
-              .join(' ');
-            role = 'user';
-            if (text) lastUserMessage = text;
-          } else if (entry.payload.role === 'assistant') {
-            text = contentParts
-              .filter(p => p.type === 'output_text' && p.text)
-              .map(p => p.text)
-              .join(' ');
-            role = 'assistant';
-          }
-        }
-
-        if (!text || !role) continue;
-        const textLower = text.toLowerCase();
-        if (!allWordsMatch(textLower)) continue;
-
-        if (matches.length < 2) {
-          const { snippet, highlights } = buildSnippet(text, textLower);
-          matches.push({ role, snippet, highlights, timestamp: entry.timestamp || null, provider: 'codex' });
-          addMatches(1);
-        }
-      }
-
-      if (matches.length > 0) {
-        projectResult.sessions.push({
-          sessionId: sessionMeta.id,
-          provider: 'codex',
-          sessionSummary: lastUserMessage
-            ? (lastUserMessage.length > 50 ? lastUserMessage.substring(0, 50) + '...' : lastUserMessage)
-            : 'Codex Session',
-          matches
-        });
-      }
-    } catch {
-      continue;
-    }
+  for (const match of matches) {
+    projectResult.sessions.push(match);
   }
 }
 
