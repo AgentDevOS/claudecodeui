@@ -11,6 +11,43 @@ import { isInternalCodexContent } from '../utils.js';
 
 const PROVIDER = 'codex';
 
+function extractCodexTextContent(content) {
+  if (typeof content === 'string') {
+    return content;
+  }
+
+  if (!Array.isArray(content)) {
+    return String(content || '');
+  }
+
+  return content
+    .map((part) => {
+      if (typeof part === 'string') {
+        return part;
+      }
+
+      if (!part || typeof part !== 'object') {
+        return '';
+      }
+
+      if (typeof part.text === 'string' && (
+        part.type === 'text' ||
+        part.type === 'input_text' ||
+        part.type === 'output_text'
+      )) {
+        return part.text;
+      }
+
+      if (typeof part.content === 'string') {
+        return part.content;
+      }
+
+      return '';
+    })
+    .filter(Boolean)
+    .join('\n');
+}
+
 /**
  * Normalize a raw Codex JSONL message into NormalizedMessage(s).
  * @param {object} raw - A single parsed message from Codex JSONL
@@ -23,11 +60,7 @@ function normalizeCodexHistoryEntry(raw, sessionId) {
 
   // User message
   if (raw.message?.role === 'user') {
-    const content = typeof raw.message.content === 'string'
-      ? raw.message.content
-      : Array.isArray(raw.message.content)
-        ? raw.message.content.map(p => typeof p === 'string' ? p : p?.text || '').filter(Boolean).join('\n')
-        : String(raw.message.content || '');
+    const content = extractCodexTextContent(raw.message.content);
     if (!content.trim()) return [];
     return [createNormalizedMessage({
       id: baseId,
@@ -42,11 +75,7 @@ function normalizeCodexHistoryEntry(raw, sessionId) {
 
   // Assistant message
   if (raw.message?.role === 'assistant') {
-    const content = typeof raw.message.content === 'string'
-      ? raw.message.content
-      : Array.isArray(raw.message.content)
-        ? raw.message.content.map(p => typeof p === 'string' ? p : p?.text || '').filter(Boolean).join('\n')
-        : '';
+    const content = extractCodexTextContent(raw.message.content);
     if (!content.trim() || isInternalCodexContent(content)) return [];
     return [createNormalizedMessage({
       id: baseId,

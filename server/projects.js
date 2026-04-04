@@ -666,6 +666,7 @@ async function getProjects(userId = null, progressCallback = null) {
 async function getSessions(projectName, limit = 5, offset = 0, userId = null) {
   await ensureProjectAccess(projectName, userId);
   const projectDir = path.join(os.homedir(), '.claude', 'projects', projectName);
+  const shouldPaginate = Number.isFinite(limit) && limit > 0;
 
   try {
     const files = await fs.readdir(projectDir);
@@ -705,7 +706,7 @@ async function getSessions(projectName, limit = 5, offset = 0, userId = null) {
       allEntries.push(...result.entries);
 
       // Early exit optimization for large projects
-      if (allSessions.size >= (limit + offset) * 2 && allEntries.length >= Math.min(3, filesWithStats.length)) {
+      if (shouldPaginate && allSessions.size >= (limit + offset) * 2 && allEntries.length >= Math.min(3, filesWithStats.length)) {
         break;
       }
     }
@@ -776,6 +777,16 @@ async function getSessions(projectName, limit = 5, offset = 0, userId = null) {
       .sort((a, b) => new Date(b.lastActivity) - new Date(a.lastActivity));
 
     const total = visibleSessions.length;
+    if (!shouldPaginate) {
+      return {
+        sessions: visibleSessions,
+        hasMore: false,
+        total,
+        offset: 0,
+        limit: null
+      };
+    }
+
     const paginatedSessions = visibleSessions.slice(offset, offset + limit);
     const hasMore = offset + limit < total;
 
@@ -796,6 +807,43 @@ async function parseJsonlSessions(filePath) {
   const sessions = new Map();
   const entries = [];
   const pendingSummaries = new Map(); // leafUuid -> summary for entries without sessionId
+
+  const extractMessageText = (content) => {
+    if (typeof content === 'string') {
+      return content;
+    }
+
+    if (!Array.isArray(content)) {
+      return '';
+    }
+
+    return content
+      .map((part) => {
+        if (typeof part === 'string') {
+          return part;
+        }
+
+        if (!part || typeof part !== 'object') {
+          return '';
+        }
+
+        if (typeof part.text === 'string' && (
+          part.type === 'text' ||
+          part.type === 'input_text' ||
+          part.type === 'output_text'
+        )) {
+          return part.text;
+        }
+
+        if (typeof part.content === 'string') {
+          return part.content;
+        }
+
+        return '';
+      })
+      .filter(Boolean)
+      .join(' ');
+  };
 
   try {
     const fileStream = fsSync.createReadStream(filePath);
@@ -844,11 +892,7 @@ async function parseJsonlSessions(filePath) {
             if (entry.message?.role === 'user' && entry.message?.content) {
               const content = entry.message.content;
 
-              // Extract text from array format if needed
-              let textContent = content;
-              if (Array.isArray(content) && content.length > 0 && content[0].type === 'text') {
-                textContent = content[0].text;
-              }
+              const textContent = extractMessageText(content);
 
               const isSystemMessage = typeof textContent === 'string' && (
                 textContent.startsWith('<command-name>') ||
@@ -876,11 +920,7 @@ async function parseJsonlSessions(filePath) {
                 let assistantText = null;
 
                 if (Array.isArray(entry.message.content)) {
-                  for (const part of entry.message.content) {
-                    if (part.type === 'text' && part.text) {
-                      assistantText = part.text;
-                    }
-                  }
+                  assistantText = extractMessageText(entry.message.content);
                 } else if (typeof entry.message.content === 'string') {
                   assistantText = entry.message.content;
                 }
@@ -1313,7 +1353,7 @@ async function addProjectManually(projectPath, displayName = null, userId = null
 }
 
 // Fetch Cursor sessions for a given project path
-async function getCursorSessions(projectPath) {
+async function getCursorSessions(projectPath, limit = 5) {
   try {
     // Calculate cwdID hash for the project path (Cursor uses MD5 hash)
     const cwdId = crypto.createHash('md5').update(projectPath).digest('hex');
@@ -1416,8 +1456,7 @@ async function getCursorSessions(projectPath) {
     // Sort sessions by creation time (newest first)
     sessions.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-    // Return only the first 5 sessions for performance
-    return sessions.slice(0, 5);
+    return limit > 0 ? sessions.slice(0, limit) : sessions;
 
   } catch (error) {
     console.error('Error fetching Cursor sessions:', error);
@@ -1519,8 +1558,26 @@ async function searchConversations(query, limit = 50, onProjectResult = null, si
     if (typeof content === 'string') return content;
     if (Array.isArray(content)) {
       return content
-        .filter(part => part.type === 'text' && part.text)
-        .map(part => part.text)
+        .map((part) => {
+          if (!part || typeof part !== 'object') {
+            return '';
+          }
+
+          if (typeof part.text === 'string' && (
+            part.type === 'text' ||
+            part.type === 'input_text' ||
+            part.type === 'output_text'
+          )) {
+            return part.text;
+          }
+
+          if (typeof part.content === 'string') {
+            return part.content;
+          }
+
+          return '';
+        })
+        .filter(Boolean)
         .join(' ');
     }
     return '';
@@ -2069,6 +2126,104 @@ async function getGeminiCliSessionMessages(sessionId) {
   return [];
 }
 
+async function locateSession(sessionId, userId = null) {
+  const safeSessionId = String(sessionId || '').trim();
+  if (!safeSessionId) {
+    return null;
+  }
+
+  const projects = await getProjects(userId);
+
+  for (const project of projects) {
+    const claudeSessionsResult = await getSessions(project.name, 0, 0, userId);
+    const claudeSessions = claudeSessionsResult.sessions || [];
+    applyCustomSessionNames(claudeSessions, 'claude');
+    const claudeSession = claudeSessions.find((session) => session.id === safeSessionId);
+    if (claudeSession) {
+      return {
+        project: {
+          name: project.name,
+          displayName: project.displayName,
+          fullPath: project.fullPath,
+          path: project.path,
+        },
+        session: {
+          ...claudeSession,
+          __provider: 'claude',
+          __projectName: project.name,
+        },
+      };
+    }
+
+    const cursorSessions = await getCursorSessions(project.fullPath, 0);
+    applyCustomSessionNames(cursorSessions, 'cursor');
+    const cursorSession = cursorSessions.find((session) => session.id === safeSessionId);
+    if (cursorSession) {
+      return {
+        project: {
+          name: project.name,
+          displayName: project.displayName,
+          fullPath: project.fullPath,
+          path: project.path,
+        },
+        session: {
+          ...cursorSession,
+          __provider: 'cursor',
+          __projectName: project.name,
+        },
+      };
+    }
+
+    const codexSessions = await getCodexSessions(project.fullPath, { limit: 0 });
+    applyCustomSessionNames(codexSessions, 'codex');
+    const codexSession = codexSessions.find((session) => session.id === safeSessionId);
+    if (codexSession) {
+      return {
+        project: {
+          name: project.name,
+          displayName: project.displayName,
+          fullPath: project.fullPath,
+          path: project.path,
+        },
+        session: {
+          ...codexSession,
+          __provider: 'codex',
+          __projectName: project.name,
+        },
+      };
+    }
+
+    const geminiUiSessions = sessionManager.getProjectSessions(project.fullPath) || [];
+    const geminiCliSessions = await getGeminiCliSessions(project.fullPath);
+    const geminiSessionMap = new Map();
+    [...geminiUiSessions, ...geminiCliSessions].forEach((session) => {
+      if (!geminiSessionMap.has(session.id)) {
+        geminiSessionMap.set(session.id, session);
+      }
+    });
+    const geminiSessions = Array.from(geminiSessionMap.values());
+    applyCustomSessionNames(geminiSessions, 'gemini');
+    const geminiSession = geminiSessions.find((session) => session.id === safeSessionId);
+    if (geminiSession) {
+      return {
+        project: {
+          name: project.name,
+          displayName: project.displayName,
+          fullPath: project.fullPath,
+          path: project.path,
+        },
+        session: {
+          ...geminiSession,
+          __provider: 'gemini',
+          __projectName: project.name,
+        },
+      };
+    }
+  }
+
+  return null;
+}
+
 export {
   getProjects,
   getSessions,
@@ -2088,5 +2243,6 @@ export {
   deleteCodexSession,
   getGeminiCliSessions,
   getGeminiCliSessionMessages,
-  searchConversations
+  searchConversations,
+  locateSession
 };

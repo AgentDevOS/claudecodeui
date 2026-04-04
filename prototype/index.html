@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>轻量计算器原型</title>
+    <meta
+      name="description"
+      content="一个独立于主项目源码的纯静态计算器原型，使用相对路径资源，适配预览基础路径。"
+    />
+    <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./assets/style.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <p class="eyebrow">Static Prototype</p>
+        <h1>轻量计算器</h1>
+        <p class="hero-copy">
+          这是一个独立于主项目源码的浏览器原型。页面仅使用静态 HTML、CSS、JS
+          和相对路径资源，适合通过 `/preview/.../prototype/` 方式直接交付预览。
+        </p>
+        <ul class="hero-points">
+          <li>四则运算与小数输入</li>
+          <li>键盘输入、退格、清空与错误提示</li>
+          <li>展示原型产物结构与轻量交付方式</li>
+        </ul>
+      </section>
+
+      <section class="calculator-panel" aria-label="计算器原型">
+        <div class="display-card">
+          <div class="display-meta">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span>纯静态预览</span>
+          </div>
+          <div class="history" id="history" aria-live="polite"></div>
+          <output class="display" id="display" aria-live="polite">0</output>
+        </div>
+
+        <div class="keypad" role="group" aria-label="计算器按键">
+          <button class="key key-ghost" data-action="clear" aria-label="全部清空">AC</button>
+          <button class="key key-ghost" data-action="backspace" aria-label="删除一个字符">⌫</button>
+          <button class="key key-ghost" data-action="percent" aria-label="百分比">%</button>
+          <button class="key key-operator" data-action="operator" data-value="/">÷</button>
+
+          <button class="key" data-action="digit" data-value="7">7</button>
+          <button class="key" data-action="digit" data-value="8">8</button>
+          <button class="key" data-action="digit" data-value="9">9</button>
+          <button class="key key-operator" data-action="operator" data-value="*">×</button>
+
+          <button class="key" data-action="digit" data-value="4">4</button>
+          <button class="key" data-action="digit" data-value="5">5</button>
+          <button class="key" data-action="digit" data-value="6">6</button>
+          <button class="key key-operator" data-action="operator" data-value="-">−</button>
+
+          <button class="key" data-action="digit" data-value="1">1</button>
+          <button class="key" data-action="digit" data-value="2">2</button>
+          <button class="key" data-action="digit" data-value="3">3</button>
+          <button class="key key-operator" data-action="operator" data-value="+">+</button>
+
+          <button class="key key-wide" data-action="digit" data-value="0">0</button>
+          <button class="key" data-action="decimal">.</button>
+          <button class="key key-equals" data-action="equals">=</button>
+        </div>
+      </section>
+
+      <aside class="info-panel">
+        <div class="info-card">
+          <p class="info-label">原型结构</p>
+          <ul class="artifact-list">
+            <li><code>prototype/index.html</code> 页面入口</li>
+            <li><code>prototype/assets/style.css</code> 样式与布局</li>
+            <li><code>prototype/assets/app.js</code> 交互逻辑</li>
+            <li><code>prototype/prototype.json</code> 原型元数据</li>
+          </ul>
+        </div>
+
+        <div class="info-card">
+          <p class="info-label">交付说明</p>
+          <p class="info-copy">
+            所有资源都通过相对路径加载，不依赖构建工具、不引用主项目源码，适合快速预览、评审和迭代。
+          </p>
+          <p class="info-copy">
+            键盘支持数字、运算符、回车、退格、百分比和小数点。
+          </p>
+        </div>
+      </aside>
+    </main>
+
+    <script src="./assets/app.js"></script>
+  </body>
+</html>

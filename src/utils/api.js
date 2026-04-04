@@ -54,6 +54,8 @@ export const api = {
   projects: () => authenticatedFetch('/api/projects'),
   sessions: (projectName, limit = 5, offset = 0) =>
     authenticatedFetch(`/api/projects/${projectName}/sessions?limit=${limit}&offset=${offset}`),
+  locateSession: (sessionId) =>
+    authenticatedFetch(`/api/sessions/${encodeURIComponent(sessionId)}/locate`),
   // Unified endpoint — all providers through one URL
   unifiedSessionMessages: (sessionId, provider = 'claude', { projectName = '', projectPath = '', limit = null, offset = 0 } = {}) => {
     const params = new URLSearchParams();

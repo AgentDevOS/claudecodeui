@@ -8,6 +8,7 @@ import type {
   Project,
   ProjectSession,
   ProjectsUpdatedMessage,
+  SessionProvider,
 } from '../types/app';
 
 type UseProjectsStateArgs = {
@@ -20,6 +21,11 @@ type UseProjectsStateArgs = {
 
 type FetchProjectsOptions = {
   showLoadingState?: boolean;
+};
+
+type LocatedSessionResult = {
+  project: Pick<Project, 'name' | 'displayName' | 'fullPath' | 'path'>;
+  session: ProjectSession;
 };
 
 const serialize = (value: unknown) => JSON.stringify(value ?? null);
@@ -70,6 +76,53 @@ const getProjectSessions = (project: Project): ProjectSession[] => {
     ...(project.cursorSessions ?? []),
     ...(project.geminiSessions ?? []),
   ];
+};
+
+const getProviderSessionKey = (provider: SessionProvider): 'sessions' | 'cursorSessions' | 'codexSessions' | 'geminiSessions' => {
+  switch (provider) {
+    case 'claude':
+      return 'sessions';
+    case 'cursor':
+      return 'cursorSessions';
+    case 'codex':
+      return 'codexSessions';
+    case 'gemini':
+      return 'geminiSessions';
+  }
+};
+
+const normalizeLocatedSession = (projectName: string, session: ProjectSession): ProjectSession => ({
+  ...session,
+  __provider: (session.__provider || 'claude') as SessionProvider,
+  __projectName: session.__projectName || projectName,
+});
+
+const mergeLocatedSessionIntoProject = (project: Project, session: ProjectSession): Project => {
+  const provider = (session.__provider || 'claude') as SessionProvider;
+  const key = getProviderSessionKey(provider);
+  const currentSessions = Array.isArray(project[key]) ? project[key] : [];
+  const nextSessions = currentSessions.some((item) => item.id === session.id)
+    ? currentSessions.map((item) => (item.id === session.id ? { ...item, ...session } : item))
+    : [session, ...currentSessions];
+
+  return {
+    ...project,
+    [key]: nextSessions,
+  };
+};
+
+const findSessionAcrossProjects = (projects: Project[], sessionId: string) => {
+  for (const project of projects) {
+    const session = getProjectSessions(project).find((item) => item.id === sessionId);
+    if (session) {
+      return {
+        project,
+        session,
+      };
+    }
+  }
+
+  return null;
 };
 
 const isUpdateAdditive = (
@@ -155,6 +208,7 @@ export function useProjectsState({
   const [externalMessageUpdate, setExternalMessageUpdate] = useState(0);
 
   const loadingProgressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const locatingSessionIdRef = useRef<string | null>(null);
 
   const fetchProjects = useCallback(async ({ showLoadingState = true }: FetchProjectsOptions = {}) => {
     try {
@@ -277,11 +331,10 @@ export function useProjectsState({
       return;
     }
 
-    if (serialize(updatedSelectedProject) !== serialize(selectedProject)) {
-      setSelectedProject(updatedSelectedProject);
-    }
-
     if (!selectedSession) {
+      if (serialize(updatedSelectedProject) !== serialize(selectedProject)) {
+        setSelectedProject(updatedSelectedProject);
+      }
       return;
     }
 
@@ -290,9 +343,21 @@ export function useProjectsState({
     );
 
     if (!updatedSelectedSession) {
+      if (sessionId === selectedSession.id) {
+        setSelectedProject(mergeLocatedSessionIntoProject(
+          updatedSelectedProject,
+          normalizeLocatedSession(updatedSelectedProject.name, selectedSession),
+        ));
+        return;
+      }
       setSelectedSession(null);
+      return;
     }
-  }, [latestMessage, selectedProject, selectedSession, activeSessions, projects]);
+
+    if (serialize(updatedSelectedProject) !== serialize(selectedProject)) {
+      setSelectedProject(updatedSelectedProject);
+    }
+  }, [latestMessage, selectedProject, selectedSession, activeSessions, projects, sessionId]);
 
   useEffect(() => {
     return () => {
@@ -308,68 +373,94 @@ export function useProjectsState({
       return;
     }
 
-    for (const project of projects) {
-      const claudeSession = project.sessions?.find((session) => session.id === sessionId);
-      if (claudeSession) {
-        const shouldUpdateProject = selectedProject?.name !== project.name;
-        const shouldUpdateSession =
-          selectedSession?.id !== sessionId || selectedSession.__provider !== 'claude';
+    const match = findSessionAcrossProjects(projects, sessionId);
+    if (!match) {
+      return;
+    }
 
-        if (shouldUpdateProject) {
-          setSelectedProject(project);
-        }
-        if (shouldUpdateSession) {
-          setSelectedSession({ ...claudeSession, __provider: 'claude' });
-        }
-        return;
-      }
+    const normalizedSession = normalizeLocatedSession(match.project.name, match.session);
+    const shouldUpdateProject = selectedProject?.name !== match.project.name;
+    const shouldUpdateSession =
+      selectedSession?.id !== sessionId || selectedSession.__provider !== normalizedSession.__provider;
 
-      const cursorSession = project.cursorSessions?.find((session) => session.id === sessionId);
-      if (cursorSession) {
-        const shouldUpdateProject = selectedProject?.name !== project.name;
-        const shouldUpdateSession =
-          selectedSession?.id !== sessionId || selectedSession.__provider !== 'cursor';
-
-        if (shouldUpdateProject) {
-          setSelectedProject(project);
-        }
-        if (shouldUpdateSession) {
-          setSelectedSession({ ...cursorSession, __provider: 'cursor' });
-        }
-        return;
-      }
-
-      const codexSession = project.codexSessions?.find((session) => session.id === sessionId);
-      if (codexSession) {
-        const shouldUpdateProject = selectedProject?.name !== project.name;
-        const shouldUpdateSession =
-          selectedSession?.id !== sessionId || selectedSession.__provider !== 'codex';
-
-        if (shouldUpdateProject) {
-          setSelectedProject(project);
-        }
-        if (shouldUpdateSession) {
-          setSelectedSession({ ...codexSession, __provider: 'codex' });
-        }
-        return;
-      }
-
-      const geminiSession = project.geminiSessions?.find((session) => session.id === sessionId);
-      if (geminiSession) {
-        const shouldUpdateProject = selectedProject?.name !== project.name;
-        const shouldUpdateSession =
-          selectedSession?.id !== sessionId || selectedSession.__provider !== 'gemini';
-
-        if (shouldUpdateProject) {
-          setSelectedProject(project);
-        }
-        if (shouldUpdateSession) {
-          setSelectedSession({ ...geminiSession, __provider: 'gemini' });
-        }
-        return;
-      }
+    if (shouldUpdateProject) {
+      setSelectedProject(match.project);
+    }
+    if (shouldUpdateSession) {
+      setSelectedSession(normalizedSession);
     }
   }, [sessionId, projects, selectedProject?.name, selectedSession?.id, selectedSession?.__provider]);
+
+  useEffect(() => {
+    if (!sessionId || projects.length === 0) {
+      locatingSessionIdRef.current = null;
+      return;
+    }
+
+    if (findSessionAcrossProjects(projects, sessionId)) {
+      locatingSessionIdRef.current = null;
+      return;
+    }
+
+    if (locatingSessionIdRef.current === sessionId) {
+      return;
+    }
+    locatingSessionIdRef.current = sessionId;
+
+    let cancelled = false;
+
+    const restoreSession = async () => {
+      try {
+        const response = await api.locateSession(sessionId);
+        if (!response.ok) {
+          return;
+        }
+
+        const located = (await response.json()) as LocatedSessionResult;
+        if (cancelled) {
+          return;
+        }
+
+        const normalizedSession = normalizeLocatedSession(located.project.name, located.session);
+        const hydratedProjectBase = projects.find((project) => project.name === located.project.name) ?? {
+          ...located.project,
+          sessions: [],
+          cursorSessions: [],
+          codexSessions: [],
+          geminiSessions: [],
+        };
+        const hydratedProject = mergeLocatedSessionIntoProject(hydratedProjectBase, normalizedSession);
+
+        setProjects((prevProjects) => {
+          const existingProject = prevProjects.find((project) => project.name === located.project.name);
+          if (!existingProject) {
+            return prevProjects;
+          }
+
+          return prevProjects.map((project) => (
+            project.name === located.project.name
+              ? mergeLocatedSessionIntoProject(project, normalizedSession)
+              : project
+          ));
+        });
+
+        setSelectedProject(hydratedProject);
+        setSelectedSession(normalizedSession);
+      } catch (error) {
+        console.error('Error locating session by id:', error);
+      } finally {
+        if (!cancelled && locatingSessionIdRef.current === sessionId) {
+          locatingSessionIdRef.current = null;
+        }
+      }
+    };
+
+    void restoreSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projects, sessionId]);
 
   const handleProjectSelect = useCallback(
     (project: Project) => {
@@ -386,6 +477,14 @@ export function useProjectsState({
 
   const handleSessionSelect = useCallback(
     (session: ProjectSession) => {
+      const sessionProjectName = typeof session.__projectName === 'string' ? session.__projectName : null;
+      if (sessionProjectName) {
+        const matchedProject = projects.find((project) => project.name === sessionProjectName);
+        if (matchedProject && matchedProject.name !== selectedProject?.name) {
+          setSelectedProject(matchedProject);
+        }
+      }
+
       setSelectedSession(session);
 
       if (activeTab === 'tasks' || activeTab === 'preview') {
@@ -398,7 +497,6 @@ export function useProjectsState({
       }
 
       if (isMobile) {
-        const sessionProjectName = session.__projectName;
         const currentProjectName = selectedProject?.name;
 
         if (sessionProjectName !== currentProjectName) {
@@ -408,7 +506,7 @@ export function useProjectsState({
 
       navigate(`/session/${session.id}`);
     },
-    [activeTab, isMobile, navigate, selectedProject?.name],
+    [activeTab, isMobile, navigate, projects, selectedProject?.name],
   );
 
   const handleNewSession = useCallback(
